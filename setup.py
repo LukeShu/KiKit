@@ -4,7 +4,7 @@ import setuptools
 import versioneer
 
 
-with open("README.md", "r") as fh:
+with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
@@ -19,9 +19,9 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/yaqwsx/KiKit",
     packages=setuptools.find_packages(),
+    license="MIT",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     install_requires=[
@@ -33,17 +33,21 @@ setuptools.setup(
         "solidpython>=1.1.2",
         "commentjson>=0.9"
     ],
-    setup_requires=[
-        "versioneer"
-    ],
     extras_require={
         "dev": [
+            "versioneer",
             "pytest",
+            "build",
             "wheel",
         ],
     },
     zip_safe=False,
-    include_package_data=True,
+    include_package_data=False,
+    package_data={
+        "kikit": [
+            "resources/**",
+        ],
+    },
     entry_points = {
         "console_scripts": [
             "kikit=kikit.ui:cli",

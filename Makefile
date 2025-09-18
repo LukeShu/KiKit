@@ -26,7 +26,7 @@ docs/panelization/examples.md: scripts/exampleDoc.py docs/resources/conn.png
 
 package:
 	rm -f dist/*
-	python3 setup.py sdist bdist_wheel
+	python3 -m build
 
 install: package
 	pip3 install --no-deps --force dist/*.whl
@@ -100,7 +100,7 @@ _empty :=
 _space := $(_empty) $(_empty)
 _STD_PATH := $(subst $(_space),:,$(filter-out $(CURDIR)/venv/bin,$(subst :,$(_space),$(PATH))))
 stdpython3 = PATH=$(_STD_PATH); unset VIRTUAL_ENV; python3
-venv: setup.py
+venv: pyproject.toml setup.py
 	python3 -m venv $@
 	ln -sf "$$($(stdpython3) -c 'import _pcbnew; print(_pcbnew.__file__)')"     $@/lib/python*/site-packages/
 	ln -sf "$$($(stdpython3) -c 'import pcbnew; print(pcbnew.__file__)')"       $@/lib/python*/site-packages/
