@@ -117,3 +117,13 @@ venv: pyproject.toml setup.py
 	fi
 	$@/bin/pip install pcbdraw
 	touch --no-create $@
+
+py_sources = $(shell git ls-files :*.py :!kikit/_version.py :!versioneer.py)
+
+format:
+	black $(py_sources)
+	isort $(py_sources)
+check-format:
+	black --check $(py_sources)
+	isort --check $(py_sources)
+.PHONY: format check-format

@@ -39,6 +39,8 @@ setuptools.setup(
             "pytest",
             "build",
             "wheel",
+            "black",
+            "isort",
         ],
     },
     zip_safe=False,

@@ -53,6 +53,10 @@ jobs:
         run: |
           python3 -m pip install -e .\[dev\]
       - run: make test
+      - run: make check-format
+        # The latest `black` that runs on Python<3.10 is Black 25, and
+        # the current Black 26 has some differences with it.
+        if: ${{ matrix.python-version != '3.8' && matrix.python-version != '3.9' }}
       - run: make package
   build-pcm:
     name: Build PCM packages
