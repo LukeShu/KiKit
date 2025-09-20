@@ -1,13 +1,24 @@
-import click
-from kikit import (panelize_ui, export_ui, present_ui, stencil_ui,
-    modify_ui, fab_ui, drc_ui)
-from kikit import __version__
 import sys
+
+import click
+
+from kikit import (
+    __version__,
+    drc_ui,
+    export_ui,
+    fab_ui,
+    modify_ui,
+    panelize_ui,
+    present_ui,
+    stencil_ui,
+)
+
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__)
 def cli():
     pass
+
 
 cli.add_command(export_ui.export)
 cli.add_command(panelize_ui.panelize)
@@ -19,10 +30,11 @@ cli.add_command(fab_ui.fab)
 cli.add_command(drc_ui.drc)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # When KiCAD crashes, we want the user to know
     import faulthandler
     import sys
+
     faulthandler.enable(sys.stderr)
 
     cli()

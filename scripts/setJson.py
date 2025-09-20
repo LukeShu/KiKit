@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-import click
 import json
 from collections import OrderedDict
+
+import click
+
 
 def setKey(obj, path, value):
     key = path[0] if isinstance(obj, dict) else int(path[0])
@@ -10,6 +12,7 @@ def setKey(obj, path, value):
         obj[key] = value
         return
     setKey(obj[key], path[1:], value)
+
 
 @click.command()
 @click.argument("input", type=click.File("r"))
@@ -27,6 +30,7 @@ def run(input, output, property):
         setKey(obj, path, value)
 
     json.dump(obj, output, indent=4)
+
 
 if __name__ == "__main__":
     run()

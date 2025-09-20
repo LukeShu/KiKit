@@ -1,12 +1,15 @@
 from __future__ import annotations
+
 from typing import Dict, List, Set, Union
+
 import numpy as np
 import pcbnew
-from kikit import units # type: ignore
 
+from kikit import units  # type: ignore
 from kikit.common import fromMm, readParameterList
 
 KString = Union[str, pcbnew.UTF8]
+
 
 def readKiKitProps(footprint):
     """
@@ -20,11 +23,13 @@ def readKiKitProps(footprint):
             continue
         text = x.GetText()
         if text.startswith("KIKIT:"):
-            return readParameterList(text[len("KIKIT:"):])
+            return readParameterList(text[len("KIKIT:") :])
     return {}
+
 
 class KiKitAnnotation:
     pass
+
 
 class TabAnnotation(KiKitAnnotation):
     def __init__(self, ref, origin, direction, width, maxLength=fromMm(100), props={}):
@@ -42,15 +47,21 @@ class TabAnnotation(KiKitAnnotation):
         direction = (np.cos(radOrientation), -np.sin(radOrientation))
         props = readKiKitProps(footprint)
         if "width" not in props:
-            raise ValueError("Tab annotation must a KiKit annotation text with 'width' property defined")
+            raise ValueError(
+                "Tab annotation must a KiKit annotation text with 'width' property defined"
+            )
         width = units.readLength(props["width"])
-        return TabAnnotation(footprint.GetReference(), origin, direction, width, props=props)
+        return TabAnnotation(
+            footprint.GetReference(), origin, direction, width, props=props
+        )
+
 
 class AnnotationReader:
     """
     Instance of this class can convert footprints into KiCAD annotations. Having
     a class instead of a function allows the users to specify source footprints.
     """
+
     def __init__(self) -> None:
         self._tabSources: Dict[str, Set[str]] = {}
         self._boardSources: Dict[str, Set[str]] = {}
@@ -61,7 +72,9 @@ class AnnotationReader:
     def registerBoard(self, lib: KString, footprint: KString) -> None:
         self._register(self._boardSources, lib, footprint)
 
-    def _register(self, where: Dict[str, Set[str]], lib: KString, footprint: KString) -> None:
+    def _register(
+        self, where: Dict[str, Set[str]], lib: KString, footprint: KString
+    ) -> None:
         libstr = str(lib).lower()
         footprintstr = str(footprint).lower()
 
@@ -75,7 +88,6 @@ class AnnotationReader:
         if lib not in where:
             return False
         return footprint in where[lib]
-
 
     def isAnnotation(self, footprint: pcbnew.FOOTPRINT) -> bool:
         """
@@ -104,7 +116,6 @@ class AnnotationReader:
         # We ignore Board annotation
         return []
 
-
     @staticmethod
     def getDefault() -> AnnotationReader:
         """
@@ -118,4 +129,3 @@ class AnnotationReader:
         r.registerTab("PCM_kikit", "Tab")
         r.registerBoard("PCM_kikit", "Board")
         return r
-

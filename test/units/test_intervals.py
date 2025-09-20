@@ -1,8 +1,11 @@
 import pytest
+
 from kikit.intervals import *
+
 
 def identity(x):
     return x
+
 
 def test_intersection():
     a = Interval(0, 2)
@@ -16,16 +19,17 @@ def test_intersection():
     assert a.intersect(d) == Interval(2, 2)
     assert a.intersect(e) is None
 
+
 def test_IntervalLists():
     I = Interval
     IL = IntervalList
-    a = IL([ I(0, 1), I(2, 3), I(5, 10) ])
-    b = IL([ I(0, 2), I(4, 8) ])
-
+    a = IL([I(0, 1), I(2, 3), I(5, 10)])
+    b = IL([I(0, 2), I(4, 8)])
 
     assert a.union(b) == IL([I(0, 3), I(4, 10)])
     assert a.difference(b) == IL([I(2, 3), I(8, 10)])
     assert a.intersect(b) == IL([I(0, 1), I(5, 8)])
+
 
 def test_boxNeighbors():
     """
@@ -52,7 +56,7 @@ def test_boxNeighbors():
     b6 = (5, 3, 6, 4)
     b7 = (1, 5, 4, 6)
     b8 = (5, 5, 6, 6)
-    boxes = { i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6, b7, b8], 1) }
+    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6, b7, b8], 1)}
 
     n = BoxNeighbors(boxes)
 
@@ -62,6 +66,7 @@ def test_boxNeighbors():
     assert n.bottom(1) == [4]
 
     assert set(n.top(7)) == set([4, 5])
+
 
 def test_boxNeighborsOverlap():
     """
@@ -81,13 +86,14 @@ def test_boxNeighborsOverlap():
     b5 = (2, 2, 3, 3)
     b6 = (3, 2, 4, 3)
 
-    boxes = { i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6], 1) }
+    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6], 1)}
 
     n = BoxNeighbors(boxes)
 
     assert n.right(1) == [2]
     assert n.left(2) == [1]
     assert n.bottom(2) == [5]
+
 
 def test_boxNeighborsNotSameLevel():
     """
@@ -110,7 +116,7 @@ def test_boxNeighborsNotSameLevel():
     b3 = (1, 3, 2, 4)
     b4 = (1, 5, 4, 6)
 
-    boxes = { i: b for i, b in enumerate([b1, b2, b3, b4], 1) }
+    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4], 1)}
 
     n = BoxNeighbors(boxes)
 
@@ -118,6 +124,7 @@ def test_boxNeighborsNotSameLevel():
     assert n.bottom(3) == [4]
     assert n.bottom(2) == [4]
     assert n.bottom(1) == [3]
+
 
 def test_bounds():
     a = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -145,17 +152,14 @@ def test_bounds():
 def test_buildShadows():
     AL = AxialLine
     lines = [AL(1, 2, 3, "L1"), AL(2, 1, 2, "L2")]
-    bounds = [
-        AL(0, 0, 3),
-        AL(1, 1, 2),
-        AL(3, 2, 3),
-        AL(4, 0, 2),
-        AL(5, 0, 3)
-    ]
+    bounds = [AL(0, 0, 3), AL(1, 1, 2), AL(3, 2, 3), AL(4, 0, 2), AL(5, 0, 3)]
 
     shadows = buildShadows(lines, bounds)
-    assert shadows == [ShadowLine(lines[0], Interval(1, 4)),
-                       ShadowLine(lines[1], Interval(1, 3))]
+    assert shadows == [
+        ShadowLine(lines[0], Interval(1, 4)),
+        ShadowLine(lines[1], Interval(1, 3)),
+    ]
+
 
 def test_trimShadows():
     AL = AxialLine
@@ -163,17 +167,10 @@ def test_trimShadows():
     I = Interval
 
     lines = [SL(AL(1, 2, 3, "L1"), I(1, 5)), SL(AL(2, 1, 2, "L2"), I(1, 3))]
-    bounds = [
-        AL(0, 0, 3),
-        AL(1, 1, 2),
-        AL(3, 2, 3),
-        AL(4, 0, 2),
-        AL(5, 0, 3)
-    ]
+    bounds = [AL(0, 0, 3), AL(1, 1, 2), AL(3, 2, 3), AL(4, 0, 2), AL(5, 0, 3)]
     shadows = trimShadows(lines, bounds)
-    assert shadows == [
-        SL(lines[0].line, I(1, 4)), SL(lines[1].line, I(1, 3))
-    ]
+    assert shadows == [SL(lines[0].line, I(1, 4)), SL(lines[1].line, I(1, 3))]
+
 
 def test_BoxPartitionLines():
     pass
@@ -188,7 +185,7 @@ def test_BoxPartitionLines():
         8: (2, 1, 3, 2),
         9: (4, 1, 5, 2),
         10: (0, -1, 5, 0),
-        11: (0, 7, 5, 8)
+        11: (0, 7, 5, 8),
     }
 
     filter = lambda idA, idB, v, l: idA < 10 or idB < 10

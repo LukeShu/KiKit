@@ -1,6 +1,8 @@
 from enum import Enum, IntEnum
 from typing import List
-from .units import mm, inch
+
+from .units import inch, mm
+
 
 class Layer(IntEnum):
     F_Cu = 0
@@ -103,6 +105,7 @@ class Layer(IntEnum):
             Layer.F_Fab,
         ] + [Layer(n) for n in range(Layer.User_1, Layer.User_9 + 2, 2)]
 
+
 class STROKE_T(IntEnum):
     S_SEGMENT = 0
     S_RECT = 1
@@ -111,23 +114,30 @@ class STROKE_T(IntEnum):
     S_POLYGON = 4
     S_CURVE = 5
 
+
 class EDA_TEXT_HJUSTIFY_T(IntEnum):
-    GR_TEXT_HJUSTIFY_LEFT   = -1
+    GR_TEXT_HJUSTIFY_LEFT = -1
     GR_TEXT_HJUSTIFY_CENTER = 0
-    GR_TEXT_HJUSTIFY_RIGHT  = 1
+    GR_TEXT_HJUSTIFY_RIGHT = 1
+
 
 class EDA_TEXT_VJUSTIFY_T(IntEnum):
-    GR_TEXT_VJUSTIFY_TOP    = -1
+    GR_TEXT_VJUSTIFY_TOP = -1
     GR_TEXT_VJUSTIFY_CENTER = 0
     GR_TEXT_VJUSTIFY_BOTTOM = 1
 
+
 class MODULE_ATTR_T(IntEnum):
-    MOD_DEFAULT = 0,
-    MOD_CMS     = 1
+    MOD_DEFAULT = (0,)
+    MOD_CMS = 1
     MOD_VIRTUAL = 2
 
-PAPER_SIZES = [f"A{size}" for size in range(6)] + ["A", "B", "C", "D", "E"] + \
-              ["USLetter", "USLegal", "USLedger"]
+
+PAPER_SIZES = (
+    [f"A{size}" for size in range(6)]
+    + ["A", "B", "C", "D", "E"]
+    + ["USLetter", "USLegal", "USLedger"]
+)
 PAPER_SIZES = PAPER_SIZES + [f"{paper}-portrait" for paper in PAPER_SIZES]
 
 PAPER_DIMENSIONS = {
@@ -144,5 +154,5 @@ PAPER_DIMENSIONS = {
     "E": (44 * inch, 34 * inch),
     "USLetter": (11 * inch, 8.5 * inch),
     "USLegal": (14 * inch, 8.5 * inch),
-    "USLedger": (17 * inch, 11 * inch)
+    "USLedger": (17 * inch, 11 * inch),
 }

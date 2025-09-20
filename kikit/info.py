@@ -1,8 +1,10 @@
-
-from kikit.pcbnew_utils import KICAD_VERSION
-from kikit.common import KIKIT_LIB
 import sys
+
 import click
+
+from kikit.common import KIKIT_LIB
+from kikit.pcbnew_utils import KICAD_VERSION
+
 
 @click.command()
 def kicadversion():
@@ -11,12 +13,14 @@ def kicadversion():
     """
     print(f"{KICAD_VERSION[0]}.{KICAD_VERSION[1]}")
 
+
 @click.command()
 def drcapi():
     """
     Return version of the DRC API
     """
     print("1")
+
 
 @click.command()
 def lib():
@@ -32,6 +36,7 @@ def cli():
     Get information about the KiCAD installation
     """
     pass
+
 
 cli.add_command(kicadversion)
 cli.add_command(drcapi)

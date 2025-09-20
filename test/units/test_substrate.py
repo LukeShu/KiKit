@@ -1,11 +1,13 @@
 import pytest
 from shapely.geometry import Point
+
 from kikit.substrate import *
 
+
 def test_biteBoundary():
-    l1 = LineString([ (0, 0), (1, 0), (1, 1), (0, 1)])
-    l2 = LineString([ (0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-    l3 = LinearRing([ (0, 0), (1, 0), (1, 1), (0, 1)])
+    l1 = LineString([(0, 0), (1, 0), (1, 1), (0, 1)])
+    l2 = LineString([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+    l3 = LinearRing([(0, 0), (1, 0), (1, 1), (0, 1)])
 
     t1 = biteBoundary(l1, Point(1, 0.5), Point(0.5, 1), 0.01)
     assert t1 == LineString([(1, 0.5), (1, 1), (0.5, 1)])

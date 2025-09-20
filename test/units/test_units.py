@@ -1,7 +1,10 @@
-import pytest
-from pcbnew import FromMM, FromMils
-from kikit.units import readLength, readAngle, UnitError
 from copy import deepcopy
+
+import pytest
+from pcbnew import FromMils, FromMM
+
+from kikit.units import UnitError, readAngle, readLength
+
 
 def test_readLength():
     assert readLength("4.24mm") == FromMM(4.24)

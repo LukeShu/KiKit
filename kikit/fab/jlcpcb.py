@@ -1,13 +1,16 @@
-import click
-import pcbnew
 import csv
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
-from kikit.fab.common import *
+
+import click
+import pcbnew
+
 from kikit.common import *
 from kikit.export import gerberImpl
+from kikit.fab.common import *
+
 
 def collectBom(components, lscsFields, ignore):
     bom = {}
@@ -19,7 +22,10 @@ def collectBom(components, lscsFields, ignore):
             continue
         if reference in ignore:
             continue
-        if getField(c, "JLCPCB_IGNORE") is not None and getField(c, "JLCPCB_IGNORE") != "":
+        if (
+            getField(c, "JLCPCB_IGNORE") is not None
+            and getField(c, "JLCPCB_IGNORE") != ""
+        ):
             continue
         if hasattr(c, "in_bom") and not c.in_bom:
             continue
@@ -32,13 +38,10 @@ def collectBom(components, lscsFields, ignore):
             orderCode = getField(c, fieldName)
             if orderCode is not None and orderCode.strip() != "":
                 break
-        cType = (
-            getField(c, "Value"),
-            getField(c, "Footprint"),
-            orderCode
-        )
+        cType = (getField(c, "Value"), getField(c, "Footprint"), orderCode)
         bom[cType] = bom.get(cType, []) + [reference]
     return bom
+
 
 def bomToCsv(bomData, filename):
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
@@ -51,13 +54,25 @@ def bomToCsv(bomData, filename):
             CHUNK_SIZE = 100
             sortedReferences = sorted(references, key=naturalComponentKey)
             for i in range(0, len(references), CHUNK_SIZE):
-                refChunk = sortedReferences[i:i+CHUNK_SIZE]
+                refChunk = sortedReferences[i : i + CHUNK_SIZE]
                 value, footprint, lcsc = cType
                 writer.writerow([value, ",".join(refChunk), footprint, lcsc])
 
-def exportJlcpcb(board, outputdir, assembly, schematic, ignore, field,
-           corrections, correctionpatterns, missingerror, nametemplate, drc,
-           autoname):
+
+def exportJlcpcb(
+    board,
+    outputdir,
+    assembly,
+    schematic,
+    ignore,
+    field,
+    corrections,
+    correctionpatterns,
+    missingerror,
+    nametemplate,
+    drc,
+    autoname,
+):
     """
     Prepare fabrication files for JLCPCB including their assembly service
     """
@@ -77,10 +92,14 @@ def exportJlcpcb(board, outputdir, assembly, schematic, ignore, field,
 
     if autoname:
         boardName = os.path.basename(board.replace(".kicad_pcb", ""))
-        archiveName = expandNameTemplate(nametemplate, boardName + "-gerbers", loadedBoard)
+        archiveName = expandNameTemplate(
+            nametemplate, boardName + "-gerbers", loadedBoard
+        )
     else:
         archiveName = expandNameTemplate(nametemplate, "gerbers", loadedBoard)
-    shutil.make_archive(os.path.join(outputdir, archiveName), "zip", outputdir, "gerber")
+    shutil.make_archive(
+        os.path.join(outputdir, archiveName), "zip", outputdir, "gerber"
+    )
 
     if not assembly:
         return
@@ -97,13 +116,17 @@ def exportJlcpcb(board, outputdir, assembly, schematic, ignore, field,
     bom_refs = set(x for xs in bom.values() for x in xs)
     bom_components = [c for c in components if getReference(c) in bom_refs]
 
-    posData = collectPosData(loadedBoard, correctionFields,
-        bom=bom_components, posFilter=noFilter, correctionFile=correctionpatterns,
-        orientationHandling=FootprintOrientationHandling.MirrorBottom)
+    posData = collectPosData(
+        loadedBoard,
+        correctionFields,
+        bom=bom_components,
+        posFilter=noFilter,
+        correctionFile=correctionpatterns,
+        orientationHandling=FootprintOrientationHandling.MirrorBottom,
+    )
     boardReferences = set([x[0] for x in posData])
     bom = {key: [v for v in val if v in boardReferences] for key, val in bom.items()}
     bom = {key: val for key, val in bom.items() if len(val) > 0}
-
 
     missingFields = False
     for type, references in bom.items():
@@ -115,5 +138,15 @@ def exportJlcpcb(board, outputdir, assembly, schematic, ignore, field,
     if missingFields and missingerror:
         sys.exit("There are components with missing ordercode, aborting")
 
-    posDataToFile(posData, os.path.join(outputdir, expandNameTemplate(nametemplate, "pos", loadedBoard) + ".csv"))
-    bomToCsv(bom, os.path.join(outputdir, expandNameTemplate(nametemplate, "bom", loadedBoard) + ".csv"))
+    posDataToFile(
+        posData,
+        os.path.join(
+            outputdir, expandNameTemplate(nametemplate, "pos", loadedBoard) + ".csv"
+        ),
+    )
+    bomToCsv(
+        bom,
+        os.path.join(
+            outputdir, expandNameTemplate(nametemplate, "bom", loadedBoard) + ".csv"
+        ),
+    )

@@ -1,14 +1,17 @@
-import click
-import os
 import csv
-import io
 import glob
+import io
+import os
 import traceback
+
+import click
+
 from kikit.panelize_ui_sections import *
 
 PKG_BASE = os.path.dirname(__file__)
 PRESETS = os.path.join(PKG_BASE, "resources/panelizePresets")
 IS_CLICK_V8 = click.__version__.startswith("8.")
+
 
 # We would like to support both, click v7 and v8 in order to maximize
 # compatibility. However, since click v8.1 there is breaking change in the way
@@ -17,11 +20,17 @@ IS_CLICK_V8 = click.__version__.startswith("8.")
 def addCompatibleShellCompletion(completionFn):
     if IS_CLICK_V8:
         import click.shell_completion
+
         def completion(*args, **kwargs):
-            return [click.shell_completion.CompletionItem(x) for x in completionFn(*args, **kwargs)]
+            return [
+                click.shell_completion.CompletionItem(x)
+                for x in completionFn(*args, **kwargs)
+            ]
+
         return {"shell_complete": completionFn}
     else:
         return {"autocompletion": completionFn}
+
 
 def splitStr(delimiter, escapeChar, s):
     """
@@ -40,12 +49,12 @@ class Section(click.ParamType):
     separated list of `key: value` pairs. The first word might omit the key; in
     that case "type" key is used.
     """
+
     name = "parameter_list"
 
     def convert(self, value, param, ctx):
         if len(value.strip()) == 0:
-            self.fail(f"{value} is not a valid argument specification",
-                param, ctx)
+            self.fail(f"{value} is not a valid argument specification", param, ctx)
         try:
             values = {}
             for i, pair in enumerate(splitStr(";", "\\", value)):
@@ -59,15 +68,15 @@ class Section(click.ParamType):
                 values[key] = value
             return values
         except (TypeError, IndexError):
-            self.fail(f"'{pair}' is not a valid key: value pair",
-                param,
-                ctx)
+            self.fail(f"'{pair}' is not a valid key: value pair", param, ctx)
+
 
 class HookPlugin(click.ParamType):
     """
     A CLI argument type for a HookPlugin. The format is <moduleName or
     path>:<plugin name>:<arg>. The arg is optional.
     """
+
     name = "<module>.<plugin>:[arg]"
 
     def convert(self, value, param, ctx):
@@ -94,18 +103,25 @@ def completePath(prefix, fileSuffix=""):
             paths.append(p)
     return paths
 
+
 def pathCompletion(fileSuffix=""):
     def f(ctx, args, incomplete):
         return completePath(incomplete, fileSuffix)
+
     return f
 
+
 def completePreset(ctx, args, incomplete):
-    presets = [":" + x.replace(".json", "")
+    presets = [
+        ":" + x.replace(".json", "")
         for x in os.listdir(PRESETS)
-        if x.endswith(".json") and (x.startswith(incomplete) or x.startswith(incomplete[1:]))]
+        if x.endswith(".json")
+        and (x.startswith(incomplete) or x.startswith(incomplete[1:]))
+    ]
     if incomplete.startswith(":"):
         return presets
     return presets + completePath(incomplete, ".json")
+
 
 def lastSectionPair(incomplete):
     """
@@ -118,8 +134,10 @@ def lastSectionPair(incomplete):
         return x[0], ""
     return x
 
+
 def hasNoSectionPair(incomplete):
     return ";" not in incomplete
+
 
 def completeSection(section):
     def fun(ctx, args, incomplete):
@@ -129,99 +147,217 @@ def completeSection(section):
 
         candidates = []
         if hasNoSectionPair(incomplete):
-            candidates.extend([x for x in section["type"].vals if x.startswith(incomplete)])
+            candidates.extend(
+                [x for x in section["type"].vals if x.startswith(incomplete)]
+            )
         if len(val) == 0:
             trimmedIncomplete = incomplete.rsplit(";", 1)[0]
-            candidates.extend([trimmedIncomplete + x + ":"
-                for x in section.keys() if x.startswith(key)])
+            candidates.extend(
+                [
+                    trimmedIncomplete + x + ":"
+                    for x in section.keys()
+                    if x.startswith(key)
+                ]
+            )
         return candidates
+
     return fun
 
+
 @click.command()
-@click.argument("input", type=click.Path(dir_okay=False),
-    **addCompatibleShellCompletion(pathCompletion(".kicad_pcb")))
-@click.argument("output", type=click.Path(dir_okay=False),
-    **addCompatibleShellCompletion(pathCompletion(".kicad_pcb")))
-@click.option("--preset", "-p", multiple=True,
+@click.argument(
+    "input",
+    type=click.Path(dir_okay=False),
+    **addCompatibleShellCompletion(pathCompletion(".kicad_pcb")),
+)
+@click.argument(
+    "output",
+    type=click.Path(dir_okay=False),
+    **addCompatibleShellCompletion(pathCompletion(".kicad_pcb")),
+)
+@click.option(
+    "--preset",
+    "-p",
+    multiple=True,
     help="A panelization preset file; use prefix ':' for built-in styles.",
-    **addCompatibleShellCompletion(completePreset))
-@click.option("--plugin", multiple=True, type=HookPlugin(),
+    **addCompatibleShellCompletion(completePreset),
+)
+@click.option(
+    "--plugin",
+    multiple=True,
+    type=HookPlugin(),
     help="A hook plugin to use during the panelization",
-    **addCompatibleShellCompletion(completePreset))
-@click.option("--layout", "-l", type=Section(),
+    **addCompatibleShellCompletion(completePreset),
+)
+@click.option(
+    "--layout",
+    "-l",
+    type=Section(),
     help="Override layout settings.",
-    **addCompatibleShellCompletion(completeSection(LAYOUT_SECTION)))
-@click.option("--source", "-s", type=Section(),
+    **addCompatibleShellCompletion(completeSection(LAYOUT_SECTION)),
+)
+@click.option(
+    "--source",
+    "-s",
+    type=Section(),
     help="Override source settings.",
-    **addCompatibleShellCompletion(completeSection(SOURCE_SECTION)))
-@click.option("--tabs", "-t", type=Section(),
+    **addCompatibleShellCompletion(completeSection(SOURCE_SECTION)),
+)
+@click.option(
+    "--tabs",
+    "-t",
+    type=Section(),
     help="Override tab settings.",
-    **addCompatibleShellCompletion(completeSection(TABS_SECTION)))
-@click.option("--cuts", "-c", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TABS_SECTION)),
+)
+@click.option(
+    "--cuts",
+    "-c",
+    type=Section(),
     help="Override cut settings.",
-    **addCompatibleShellCompletion(completeSection(CUTS_SECTION)))
-@click.option("--framing", "-r", type=Section(),
+    **addCompatibleShellCompletion(completeSection(CUTS_SECTION)),
+)
+@click.option(
+    "--framing",
+    "-r",
+    type=Section(),
     help="Override framing settings.",
-    **addCompatibleShellCompletion(completeSection(FRAMING_SECTION)))
-@click.option("--tooling", "-o", type=Section(),
+    **addCompatibleShellCompletion(completeSection(FRAMING_SECTION)),
+)
+@click.option(
+    "--tooling",
+    "-o",
+    type=Section(),
     help="Override tooling settings.",
-    **addCompatibleShellCompletion(completeSection(TOOLING_SECTION)))
-@click.option("--fiducials", "-f", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TOOLING_SECTION)),
+)
+@click.option(
+    "--fiducials",
+    "-f",
+    type=Section(),
     help="Override fiducials settings.",
-    **addCompatibleShellCompletion(completeSection(FIDUCIALS_SECTION)))
-@click.option("--text", type=Section(),
+    **addCompatibleShellCompletion(completeSection(FIDUCIALS_SECTION)),
+)
+@click.option(
+    "--text",
+    type=Section(),
     help="Override text settings.",
-    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)))
-@click.option("--text2", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)),
+)
+@click.option(
+    "--text2",
+    type=Section(),
     help="Override text settings.",
-    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)))
-@click.option("--text3", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)),
+)
+@click.option(
+    "--text3",
+    type=Section(),
     help="Override text settings.",
-    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)))
-@click.option("--text4", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)),
+)
+@click.option(
+    "--text4",
+    type=Section(),
     help="Override text settings.",
-    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)))
-@click.option("--copperfill", "-u", type=Section(),
+    **addCompatibleShellCompletion(completeSection(TEXT_SECTION)),
+)
+@click.option(
+    "--copperfill",
+    "-u",
+    type=Section(),
     help="Override copper fill settings.",
-    **addCompatibleShellCompletion(completeSection(COPPERFILL_SECTION)))
-@click.option("--page", "-P", type=Section(),
+    **addCompatibleShellCompletion(completeSection(COPPERFILL_SECTION)),
+)
+@click.option(
+    "--page",
+    "-P",
+    type=Section(),
     help="Override page settings.",
-    **addCompatibleShellCompletion(completeSection(POST_SECTION)))
-@click.option("--post", "-z", type=Section(),
+    **addCompatibleShellCompletion(completeSection(POST_SECTION)),
+)
+@click.option(
+    "--post",
+    "-z",
+    type=Section(),
     help="Override post processing settings.",
-    **addCompatibleShellCompletion(completeSection(POST_SECTION)))
-@click.option("--debug", type=Section(),
+    **addCompatibleShellCompletion(completeSection(POST_SECTION)),
+)
+@click.option(
+    "--debug",
+    type=Section(),
     help="Include debug traces or drawings in the panel.",
-    **addCompatibleShellCompletion(completeSection(DEBUG_SECTION)))
-@click.option("--dump", "-d", type=click.Path(file_okay=True, dir_okay=False),
-    help="Dump constructured preset into a JSON file.")
-def panelize(input, output, preset, plugin, layout, source, tabs, cuts, framing,
-             tooling, fiducials, text, text2, text3, text4, copperfill, page,
-             post, debug, dump):
+    **addCompatibleShellCompletion(completeSection(DEBUG_SECTION)),
+)
+@click.option(
+    "--dump",
+    "-d",
+    type=click.Path(file_okay=True, dir_okay=False),
+    help="Dump constructured preset into a JSON file.",
+)
+def panelize(
+    input,
+    output,
+    preset,
+    plugin,
+    layout,
+    source,
+    tabs,
+    cuts,
+    framing,
+    tooling,
+    fiducials,
+    text,
+    text2,
+    text3,
+    text4,
+    copperfill,
+    page,
+    post,
+    debug,
+    dump,
+):
     """
     Panelize boards
     """
     try:
         # Hide the import in the function to make KiKit start faster
-        from kikit import panelize_ui_impl as ki
         import sys
+
+        from kikit import panelize_ui_impl as ki
         from kikit.common import fakeKiCADGui
+
         app = fakeKiCADGui()
 
-        preset = ki.obtainPreset(preset,
-            layout=layout, source=source, tabs=tabs, cuts=cuts, framing=framing,
-            tooling=tooling, fiducials=fiducials, text=text,text2=text2,
-            text3=text3, text4=text4, copperfill=copperfill, page=page,
-            post=post, debug=debug)
+        preset = ki.obtainPreset(
+            preset,
+            layout=layout,
+            source=source,
+            tabs=tabs,
+            cuts=cuts,
+            framing=framing,
+            tooling=tooling,
+            fiducials=fiducials,
+            text=text,
+            text2=text2,
+            text3=text3,
+            text4=text4,
+            copperfill=copperfill,
+            page=page,
+            post=post,
+            debug=debug,
+        )
 
         doPanelization(input, output, preset, plugin)
 
-        if (dump):
+        if dump:
             with open(dump, "w", encoding="utf-8") as f:
                 f.write(ki.dumpPreset(preset))
     except Exception as e:
         import sys
+
         from kikit.panelize import NonFatalErrors
+
         if isinstance(e, NonFatalErrors):
             sys.stderr.write(str(e) + "\n")
         else:
@@ -231,26 +367,32 @@ def panelize(input, output, preset, plugin, layout, source, tabs, cuts, framing,
             traceback.print_exc(file=sys.stderr)
         sys.exit(1)
 
+
 def doPanelization(input, output, preset, plugins=[]):
     """
     The panelization logic is separated into a separate function so we can
     handle errors based on the context; e.g., CLI vs GUI
     """
-    from kikit import panelize_ui_impl as ki
-    from kikit.panelize import Panel, NonFatalErrors, PanelError
+    from itertools import chain
+
     import pcbnew
     from pcbnew import LoadBoard
-    from itertools import chain
+
+    from kikit import panelize_ui_impl as ki
+    from kikit.panelize import NonFatalErrors, Panel, PanelError
 
     if preset["debug"]["drawtabfail"]:
         import kikit.substrate
+
         kikit.substrate.TABFAIL_VISUAL = True
 
     board = LoadBoard(input)
     if preset["debug"]["deterministic"]:
         pcbnew.KIID.SeedGenerator(42)
     if board is None:
-        raise PanelError(f"Cannot load board {input}. Check if the path is correct or if you have permissions to read it.")
+        raise PanelError(
+            f"Cannot load board {input}. Check if the path is correct or if you have permissions to read it."
+        )
     panel = Panel(output)
 
     useHookPlugins = ki.loadHookPlugins(plugins, board, preset)
@@ -269,8 +411,9 @@ def doPanelization(input, output, preset, plugins=[]):
     useHookPlugins(lambda x: x.afterPanelSetup(panel))
 
     sourceArea = ki.readSourceArea(preset["source"], board)
-    substrates, framingSubstrates, backboneCuts = \
-        ki.buildLayout(preset, panel, input, sourceArea)
+    substrates, framingSubstrates, backboneCuts = ki.buildLayout(
+        preset, panel, input, sourceArea
+    )
 
     useHookPlugins(lambda x: x.afterLayout(panel, substrates))
 
@@ -308,9 +451,11 @@ def doPanelization(input, output, preset, plugins=[]):
 
     ki.buildDebugAnnotation(preset["debug"], panel)
 
-    panel.save(reconstructArcs=preset["post"]["reconstructarcs"],
-               refillAllZones=preset["post"]["refillzones"],
-               edgeWidth=preset["post"]["edgewidth"])
+    panel.save(
+        reconstructArcs=preset["post"]["reconstructarcs"],
+        refillAllZones=preset["post"]["refillzones"],
+        edgeWidth=preset["post"]["edgewidth"],
+    )
 
     if panel.hasErrors():
         raise NonFatalErrors(panel.errors)
@@ -319,17 +464,25 @@ def doPanelization(input, output, preset, plugins=[]):
 @click.command()
 @click.argument("input", type=click.Path(dir_okay=False))
 @click.argument("output", type=click.Path(dir_okay=False))
-@click.option("--source", "-s", type=Section(),
-    help="Specify source settings.")
-@click.option("--page", "-P", type=Section(),
+@click.option("--source", "-s", type=Section(), help="Specify source settings.")
+@click.option(
+    "--page",
+    "-P",
+    type=Section(),
     help="Override page settings.",
-    **addCompatibleShellCompletion(completeSection(POST_SECTION)))
-@click.option("--debug", type=Section(),
-    help="Include debug traces or drawings in the panel.")
-@click.option("--keepAnnotations/--stripAnnotations", default=True,
-    help="Do not strip annotations" )
-@click.option("--preserveArcs/--looseArcs", default=True,
-    help="Preserve arcs in the files" )
+    **addCompatibleShellCompletion(completeSection(POST_SECTION)),
+)
+@click.option(
+    "--debug", type=Section(), help="Include debug traces or drawings in the panel."
+)
+@click.option(
+    "--keepAnnotations/--stripAnnotations",
+    default=True,
+    help="Do not strip annotations",
+)
+@click.option(
+    "--preserveArcs/--looseArcs", default=True, help="Preserve arcs in the files"
+)
 def separate(input, output, source, page, debug, keepannotations, preservearcs):
     """
     Separate a single board out of a multi-board design. The separated board is
@@ -339,15 +492,19 @@ def separate(input, output, source, page, debug, keepannotations, preservearcs):
     for further details on usage.
     """
     try:
-        from kikit import panelize_ui_impl as ki
-        from kikit.panelize import Panel, NonFatalErrors
-        from kikit.units import mm
         import pcbnew
-        from pcbnew import LoadBoard, VECTOR2I
+        from pcbnew import VECTOR2I, LoadBoard
+
+        from kikit import panelize_ui_impl as ki
         from kikit.common import fakeKiCADGui
+        from kikit.panelize import NonFatalErrors, Panel
+        from kikit.units import mm
+
         app = fakeKiCADGui()
 
-        preset = ki.obtainPreset([], validate=False, source=source, page=page, debug=debug)
+        preset = ki.obtainPreset(
+            [], validate=False, source=source, page=page, debug=debug
+        )
 
         board = LoadBoard(input)
         if preset["debug"]["deterministic"]:
@@ -361,10 +518,14 @@ def separate(input, output, source, page, debug, keepannotations, preservearcs):
         panel.inheritLayerNames(board)
 
         destination = VECTOR2I(150 * mm, 100 * mm)
-        panel.appendBoard(input, destination, sourceArea,
+        panel.appendBoard(
+            input,
+            destination,
+            sourceArea,
             interpretAnnotations=(not keepannotations),
             netRenamer=lambda i, x: x,
-            refRenamer=lambda i, x: x)
+            refRenamer=lambda i, x: x,
+        )
         ki.setStackup(preset["source"], panel)
         ki.setPageSize(preset["page"], panel, board)
         ki.positionPanel(preset["page"], panel)
@@ -375,6 +536,7 @@ def separate(input, output, source, page, debug, keepannotations, preservearcs):
             raise NonFatalErrors(panel.errors)
     except Exception as e:
         import sys
+
         sys.stderr.write("An error occurred: " + str(e) + "\n")
         sys.stderr.write("No output files produced\n")
         if isinstance(preset, dict) and preset["debug"]["trace"]:

@@ -5,20 +5,23 @@ Generate documentation in markdown format for examples
 """
 
 import sys
-from kikit.doc import runBoardExample, runExampleJoin
+
 import pcbnew
 
+from kikit.doc import runBoardExample, runExampleJoin
+
 counter = 0
+
 
 def autoName():
     global counter
     counter += 1
     return f"examplePanel{counter}"
 
+
 SRC = "docs/resources/conn.kicad_pcb"
 
-print(
-"""
+print("""
 # Examples
 
 This document will show you several examples of KiKit CLI for panelization. Note
@@ -36,22 +39,24 @@ PcbDraw:
 ![conn](../resources/conn.png)
 """)
 
-print(
-"""
+print("""
 ## Basic panels & layout
 
 Let's start with our first panel.
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2;"],
         ["--tabs", "full"],
         ["--cuts", "vcuts"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
-print(
-"""
+print("""
 We specified that we want 2x2 panel, no space between board and separate them by
 V-cuts. We also specified that we want to build full tabs (although no tabs are
 visible in this example). This is ,however, essential – if we omitted tabs, no
@@ -96,13 +101,17 @@ I told you that the panel above is not suitable for manufacturing. Let's see
 why:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2;"],
         ["--tabs", "full"],
         ["--cuts", "vcuts"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 We specified a milling simulation post-processing. This simulates the milling
@@ -115,28 +124,35 @@ have rounded corners, you will use short tabs instead and add some space between
 the boards. So let's fix it:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; hwidth: 10mm; vwidth: 15mm"],
         ["--cuts", "vcuts"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 In that way, the rounded corners can be machined. Lets' see the same example
 with mousebites instead:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 5mm"],
         ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
-print(
-"""
+print("""
 We changed cut type to mousebites and we specified that they should be
 performed by 0.5mm holes with a spacing of 1 mm. You could also use inches if
 you want – just specify `<number>in. Since we use mousebites, we used narrower
@@ -148,41 +164,58 @@ break away the tabs, all burs will be inside the intended board outline.
 What happens, when we simulate the milling operation?
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 5mm"],
         ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
-print(
-"""
+print("""
 See? The cuts are somewhat short. This is due to the internal corners that
 cannot be milled. KiKit can fix that for you – just specify you want to prolong
 your cuts tangentially by a small amount:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 If you want, you can also specify a number of tabs to generate. KiKit will place
 them evenly:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 You can also append frame or rails to the panel. Frames and rail are useful in
@@ -197,14 +230,21 @@ the following situations:
 Let's start with rails:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Similarly, you can add left and right rail via the `railslr` type. If you want
@@ -213,27 +253,41 @@ sense to include cuts in the corner of the frame, so you can break it apart
 easily. Let's see an example:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "frame; width: 5mm; space: 3mm; cuts: both"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Note that you can also use just only a vertical or horizontal frame cuts:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "frame; width: 5mm; space: 3mm; cuts: h"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 When you use V-cuts it might make sense to not remove all material, but only
@@ -243,31 +297,48 @@ via framing type `tightframe`. Note that it does not make much sense with
 mousebites.
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 6mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
         ["--cuts", "vcuts"],
         ["--framing", "tightframe; width: 5mm; space: 3mm; "],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Once we have a frame, we can append a tooling holes, fiducials and some text to
 it:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--tooling", "3hole; hoffset: 2.5mm; voffset: 2.5mm; size: 1.5mm"],
-        ["--fiducials", "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;"],
-        ["--text", "simple; text: yaqwsx's panel; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;"],
+        [
+            "--fiducials",
+            "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;",
+        ],
+        [
+            "--text",
+            "simple; text: yaqwsx's panel; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 If you want to add text to both rails, you can use section `--text2` to add a
@@ -276,18 +347,34 @@ list of supported variables is listed in the documentation. Also, plugins can
 introduce new variables.
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--tooling", "3hole; hoffset: 2.5mm; voffset: 2.5mm; size: 1.5mm"],
-        ["--fiducials", "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;"],
-        ["--text", "simple; text: yaqwsx's panel; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;"],
-        ["--text2", "simple; text: Created on {date}; anchor: mb; voffset: -2.5mm; hjustify: center; vjustify: center;"],
+        [
+            "--fiducials",
+            "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;",
+        ],
+        [
+            "--text",
+            "simple; text: yaqwsx's panel; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;",
+        ],
+        [
+            "--text2",
+            "simple; text: Created on {date}; anchor: mb; voffset: -2.5mm; hjustify: center; vjustify: center;",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 There are many options for text and fiducials. Be sure to read the [full
@@ -297,27 +384,47 @@ If you have an automatic feeder in your PNP machine or you just dislike
 sharp corners, you can add a chamfer or a fillet to the panel frame/rails:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm; fillet: 1mm"],
         ["--tooling", "3hole; hoffset: 2.5mm; voffset: 2.5mm; size: 1.5mm"],
-        ["--fiducials", "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;"],
+        [
+            "--fiducials",
+            "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm; chamfer: 1mm"],
         ["--tooling", "3hole; hoffset: 2.5mm; voffset: 2.5mm; size: 1.5mm"],
-        ["--fiducials", "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;"],
+        [
+            "--fiducials",
+            "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Some services, e.g., JLC PCB require a minimal panel size. If you want to ensure
@@ -325,18 +432,33 @@ that your panel meets the criteria, you can specify minimal total width/height
 of the panel. Let's see an example:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
-        ["--framing", "frame; width: 5mm; space: 3mm; mintotalheight: 100mm; mintotalwidth: 100mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
+        [
+            "--framing",
+            "frame; width: 5mm; space: 3mm; mintotalheight: 100mm; mintotalwidth: 100mm",
+        ],
         ["--tooling", "3hole; hoffset: 2.5mm; voffset: 2.5mm; size: 1.5mm"],
-        ["--fiducials", "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;"],
-        ["--text", "simple; text: yaqwsx's panel with minimal dimensions; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;"],
+        [
+            "--fiducials",
+            "3fid; hoffset: 5mm; voffset: 2.5mm; coppersize: 2mm; opening: 1mm;",
+        ],
+        [
+            "--text",
+            "simple; text: yaqwsx's panel with minimal dimensions; anchor: mt; voffset: 2.5mm; hjustify: center; vjustify: center;",
+        ],
         ["--post", "millradius: 1mm"],
-        [SRC]])
-
+        [SRC],
+    ],
+)
 
 
 print("""
@@ -351,14 +473,21 @@ shaped boards:
 
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 0mm; rotation: 45deg;"],
         ["--tabs", "fixed; width: 3mm;"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.75mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.75mm",
+        ],
         ["--framing", "frame; width: 5mm; space: 3mm; cuts: both"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 When your board has a connector sticking one one side of the board, it makes
@@ -369,14 +498,21 @@ component references when rotating boards – KiCAD's references have a property
 be sure to turn it off before panelizing. Here's an example:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 3mm; alternation: cols;"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "frame; width: 5mm; space: 3mm; cuts: both"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Another solution might be to not put tabs on, e.g., vertical edges of the PCB.
@@ -387,14 +523,24 @@ Also, similarly with frames, you can put cuts on your backbone to make
 depanelization of your boards easier. Enough theory, let's see an example
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
-        ["--layout", "grid; rows: 2; cols: 2; space: 2mm; hbackbone: 5mm; hbonecut: true"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
+        [
+            "--layout",
+            "grid; rows: 2; cols: 2; space: 2mm; hbackbone: 5mm; hbonecut: true",
+        ],
         ["--tabs", "fixed; width: 3mm; vcount: 2; hcount: 0"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Often, not all backbones are needed. Especially for larger panels. Therefore, if
@@ -402,14 +548,24 @@ you want, you can skip some of them. Consider the following 4×4 panel with only
 ever other backbone:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
-        ["--layout", "grid; rows: 4; cols: 4; space: 2mm; hbackbone: 5mm; vbackbone: 5mm; hboneskip: 1; vboneskip: 1"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
+        [
+            "--layout",
+            "grid; rows: 4; cols: 4; space: 2mm; hbackbone: 5mm; vbackbone: 5mm; hboneskip: 1; vboneskip: 1",
+        ],
         ["--tabs", "fixed; width: 3mm; vcount: 2; hcount: 0"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 
 print("""
@@ -425,15 +581,22 @@ text property of the symbol. How to use it? Just specify tab type to
 capture the annotations.
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 5mm;"],
         ["--tabs", "annotation"],
         ["--source", "tolerance: 15mm"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Well, the panel looks strange – right? That's because KiKit always constructs a
@@ -443,15 +606,25 @@ tightframe. If you are interested in the details, read more about tabs in
 section [Understanding tabs](tabs.md). Let's fix it:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
-        ["--layout", "grid; rows: 2; cols: 2; space: 2mm; hbackbone: 3mm; vbackbone: 3mm"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
+        [
+            "--layout",
+            "grid; rows: 2; cols: 2; space: 2mm; hbackbone: 3mm; vbackbone: 3mm",
+        ],
         ["--tabs", "annotation"],
         ["--source", "tolerance: 15mm"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 Note that the annotation can have an arbitrary orientation. The arrow just must
@@ -464,30 +637,41 @@ copper on all non-functional parts of the panel. It will make the PCB rigid. You
 can do so via `copperfill` section:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm;"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--copperfill", "solid"],
         ["--post", "millradius: 1mm;"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 When you use V-cuts with `copperfill` you (or your fab house) might want to
 include a clearance around the V-cuts:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; hwidth: 10mm; vwidth: 15mm"],
         ["--cuts", "vcuts; clearance: 1.5mm"],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--copperfill", "solid"],
         ["--post", "millradius: 1mm;"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 print("""
 If you, for example do not wish to cover the tabs with copper, you can also
@@ -495,15 +679,22 @@ specify clearance. Also, some manufacturers don't like when you have large solid
 copper areas. In that case, you can use a hatch pattern to fill the area:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm;"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--copperfill", "hatched; clearance: 2mm; spacing: 0.5mm; width: 0.5mm"],
         ["--post", "millradius: 1mm;"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 
 print("""
@@ -535,14 +726,21 @@ def kikitPostprocess(panel, arg):
 Then run KiKit:
 """)
 
-runBoardExample(autoName(),
-    [["panelize"],
+runBoardExample(
+    autoName(),
+    [
+        ["panelize"],
         ["--layout", "grid; rows: 2; cols: 2; space: 2mm"],
         ["--tabs", "fixed; width: 3mm; vcount: 2"],
-        ["--cuts", "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm"],
+        [
+            "--cuts",
+            "mousebites; drill: 0.5mm; spacing: 1mm; offset: 0.2mm; prolong: 0.5mm",
+        ],
         ["--framing", "railstb; width: 5mm; space: 3mm;"],
         ["--post", "millradius: 1mm; script: docs/resources/examplePost.py"],
-        [SRC]])
+        [SRC],
+    ],
+)
 
 
 print("""

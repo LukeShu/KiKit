@@ -4,15 +4,18 @@
 Generate documentation in markdown format for panelization
 """
 
-from kikit import panelize
-from kikit import substrate
-from kikit.doc import header, printHelp, printHeader
-import pcbnew
 import inspect
+
+import pcbnew
+
+from kikit import panelize, substrate
+from kikit.doc import header, printHeader, printHelp
+
 
 def synopsis(object):
     printHeader(object)
     printHelp(object)
+
 
 def classMethods(c):
     for name, o in inspect.getmembers(c, predicate=inspect.isfunction):
@@ -20,8 +23,8 @@ def classMethods(c):
             continue
         synopsis(o)
 
-print(
-f"""
+
+print(f"""
 # Panelization
 
 When you want to panelize a board, you are expected to load the `kikit.panelize`
@@ -46,8 +49,7 @@ also encouraged to use the functions and objects the native KiCAD Python API
 offers, e.g.: {'`, `'.join([header(pcbnew.VECTOR2I),header(pcbnew.BOX2I)])}.
 """)
 
-print(
-"""
+print("""
 ## Basic Concepts
 
 The `kikit.panelize.Panel` class holds a panel under construction. Basically it
@@ -98,8 +100,7 @@ bounding box of all Edge.Cuts is taken.
 Only components that fully fit inside source area are copied to the panel. To
 include components sticking out of the board outline, you can specify tolerance
 -- a distance by which the source area is expanded when copying components.
-"""
-)
+""")
 
 print(f"""
 ## Panel class
@@ -127,4 +128,3 @@ a partition line for the substrate. Read more about partition lines in
 """)
 
 classMethods(substrate.Substrate)
-

@@ -5,8 +5,10 @@ from typing import Callable, Dict, Iterable, Optional, Union
 # same result). Might not support all features of S-expression, but should be
 # enough to properly parser KiCAD's S-Expressions
 
+
 class ParseError(RuntimeError):
     pass
+
 
 # We want the parser to be able to operate on a stream of data, so we define a
 # chunked reader that allows us to go back and extract parts of the string.
@@ -24,8 +26,8 @@ class Stream:
         # If there's marked content we need to keep, preserve it
         has_grown = True
         if self.mark_start >= 0:
-            marked_content = self.buffer[self.mark_start:self.position]
-            remaining_content = self.buffer[self.position:]
+            marked_content = self.buffer[self.mark_start : self.position]
+            remaining_content = self.buffer[self.position :]
             new_data = self.stream.read(self.buffer_size)
             if len(new_data) == 0:
                 has_grown = False
@@ -34,7 +36,7 @@ class Stream:
             self.mark_start = 0  # Marked content now starts at beginning of buffer
         else:
             # No marked content, just read more data
-            remaining = self.buffer[self.position:]
+            remaining = self.buffer[self.position :]
             new_data = self.stream.read(self.buffer_size)
             if len(new_data) == 0:
                 has_grown = False
@@ -49,7 +51,7 @@ class Stream:
             self.position += 1
         except:
             if not self._fill_buffer():
-                return ''
+                return ""
             result = self.buffer[self.position]
             self.position += 1
         return result
@@ -63,7 +65,7 @@ class Stream:
             l = len(self.buffer)
             while pos < l and self.buffer[pos].isspace():
                 pos += 1
-            whitespace += self.buffer[self.position:pos]
+            whitespace += self.buffer[self.position : pos]
             self.position = pos
 
             # If we've reached the end of the buffer, try to fill it
@@ -88,7 +90,7 @@ class Stream:
                 pos += 1
 
             # Add what we've read to our result
-            result += self.buffer[self.position:pos]
+            result += self.buffer[self.position : pos]
             self.position = pos
 
             # If we've reached the end of the buffer, try to fill it
@@ -122,10 +124,10 @@ class Stream:
                 else:
                     escaped = False
 
-            result += self.buffer[self.position:pos]
+            result += self.buffer[self.position : pos]
             self.position = pos
             if terminated:
-                self.shift('"') # Consume the closing quote
+                self.shift('"')  # Consume the closing quote
 
             # If we've reached the end of the buffer, try to fill it
             if self.position >= len(self.buffer):
@@ -145,11 +147,11 @@ class Stream:
             while pos < l:
                 if self.buffer[pos] == "\n":
                     pos += 1  # include the newline
-                    result += self.buffer[self.position:pos]
+                    result += self.buffer[self.position : pos]
                     self.position = pos
                     return result
                 pos += 1
-            result += self.buffer[self.position:pos]
+            result += self.buffer[self.position : pos]
             self.position = pos
             if not self._fill_buffer():
                 return result
@@ -168,7 +170,6 @@ class Stream:
             value = self.readUntilEndOfString()
         return Atom(value, leadingWhitespace=whitespace, quoted=quoted)
 
-
     def back(self):
         """Move back one character in the stream"""
         if self.position > 0:
@@ -185,7 +186,7 @@ class Stream:
 
     def readAll(self):
         """Read all remaining content from the stream"""
-        result = self.buffer[self.position:]
+        result = self.buffer[self.position :]
         self.position = len(self.buffer)
         self.mark_start = -1  # Reset any mark when reading all
         additional = self.stream.read()
@@ -210,7 +211,7 @@ class Stream:
             self.mark_start = -1
             return ""
 
-        result = self.buffer[self.mark_start:self.position]
+        result = self.buffer[self.mark_start : self.position]
         self.mark_start = -1  # Reset marker
         return result
 
@@ -222,7 +223,7 @@ class Stream:
 
 
 class Atom:
-    __slots__ = ['value', 'quoted', 'leadingWhitespace']
+    __slots__ = ["value", "quoted", "leadingWhitespace"]
 
     def __init__(self, value, leadingWhitespace="", quoted=False):
         self.value = value
@@ -246,9 +247,17 @@ class Atom:
 
 
 class SExpr:
-    __slots__ = ['items', 'leadingWhitespace', 'trailingWhitespace', 'complete', 'trailingOuterWhitespace']
+    __slots__ = [
+        "items",
+        "leadingWhitespace",
+        "trailingWhitespace",
+        "complete",
+        "trailingOuterWhitespace",
+    ]
 
-    def __init__(self, items=None, leadingWhitespace="", trailingWhitespace="", complete=True):
+    def __init__(
+        self, items=None, leadingWhitespace="", trailingWhitespace="", complete=True
+    ):
         if items is None:
             self.items = []
         else:
@@ -261,11 +270,14 @@ class SExpr:
     def __str__(self):
         # TBA: we should validate that two atoms do not get squished together
         # as they have wrongly specified whitespace
-        return (self.leadingWhitespace + "("
+        return (
+            self.leadingWhitespace
+            + "("
             + "".join([str(x) for x in self.items])
             + self.trailingWhitespace
             + (")" if self.complete else "")
-            + self.trailingOuterWhitespace)
+            + self.trailingOuterWhitespace
+        )
 
     def __repr__(self):
         val = [x.__repr__() for x in self.items]
@@ -274,10 +286,12 @@ class SExpr:
     def __eq__(self, o):
         if not isinstance(o, SExpr):
             return False
-        return (self.items == o.items and
-                self.leadingWhitespace == o.leadingWhitespace and
-                self.trailingWhitespace == o.trailingWhitespace and
-                self.complete == o.complete)
+        return (
+            self.items == o.items
+            and self.leadingWhitespace == o.leadingWhitespace
+            and self.trailingWhitespace == o.trailingWhitespace
+            and self.complete == o.complete
+        )
 
     def __iter__(self):
         return self.items.__iter__()
@@ -287,6 +301,7 @@ class SExpr:
 
     def __len__(self):
         return self.items.__len__()
+
 
 def readWhitespaceWithComments(stream):
     stream.markStart()
@@ -308,6 +323,7 @@ def readWhitespaceWithComments(stream):
                     break
 
     return stream.getMarkedContent()
+
 
 def readSexpr(stream, limit=None):
     """
@@ -363,6 +379,7 @@ def readSexpr(stream, limit=None):
 
     return expr
 
+
 def parseSexprF(sourceStream, limit=None, buffer_size=4096):
     stream = Stream(sourceStream, buffer_size=buffer_size)
     lw = stream.readUntilEndOfWhitespace()
@@ -371,8 +388,10 @@ def parseSexprF(sourceStream, limit=None, buffer_size=4096):
     s.trailingOuterWhitespace = stream.readUntilEndOfWhitespace()
     return s
 
+
 def parseSexprS(s, limit=None, buffer_size=4096):
     return parseSexprF(StringIO(s), limit=limit, buffer_size=buffer_size)
+
 
 def parseSexprListF(sourceStream, limit=None, buffer_size=4096):
     sexprs = []
@@ -392,7 +411,9 @@ def parseSexprListF(sourceStream, limit=None, buffer_size=4096):
 
     return sexprs
 
+
 AstNode = Union[SExpr, Atom]
+
 
 def isElement(name: str) -> Callable[[AstNode], bool]:
     def f(node: AstNode) -> bool:
@@ -400,7 +421,9 @@ def isElement(name: str) -> Callable[[AstNode], bool]:
             return False
         item = node[0]
         return isinstance(item, Atom) and item.value == name
+
     return f
+
 
 def readDict(nodes: Iterable[AstNode]) -> Dict[str, AstNode]:
     d = {}
@@ -414,6 +437,7 @@ def readDict(nodes: Iterable[AstNode]) -> Dict[str, AstNode]:
         d[key.value] = value
     return d
 
+
 def readStrDict(nodes: Iterable[AstNode]) -> Dict[str, str]:
     d = {}
     for key, value in readDict(nodes).items():
@@ -421,6 +445,7 @@ def readStrDict(nodes: Iterable[AstNode]) -> Dict[str, str]:
             raise RuntimeError("Dictionary is not a string dictionary")
         d[key] = value.value
     return d
+
 
 def findNode(nodes: Iterable[AstNode], name: str) -> Optional[SExpr]:
     """

@@ -1,18 +1,20 @@
 import csv
+import re
+import sys
 from dataclasses import dataclass
 from enum import Enum
-import re
+from math import cos, radians, sin
 from typing import OrderedDict
-from kikit.project import KiCADProject
+
 import pcbnew
-from math import sin, cos, radians
+
+from kikit import drc, eeschema, eeschema_v6
 from kikit.common import *
 from kikit.defs import MODULE_ATTR_T
 from kikit.drc_ui import ReportLevel
-from kikit import drc
-from kikit import eeschema, eeschema_v6
+from kikit.project import KiCADProject
 from kikit.text import kikitTextVars
-import sys
+
 
 # A user can still supply v5 schematics even when we run v6, therefore,
 # we have to load the correct schematics and provide the right getters
@@ -23,31 +25,38 @@ def extractComponents(filename):
         return eeschema.extractComponents(filename)
     raise RuntimeError(f"Unknown schematic file type specified: {filename}")
 
+
 def getUnit(component):
     if isinstance(component, eeschema_v6.Symbol):
         return eeschema_v6.getUnit(component)
     return eeschema.getUnit(component)
+
 
 def getField(component, field):
     if isinstance(component, eeschema_v6.Symbol):
         return eeschema_v6.getField(component, field)
     return eeschema.getField(component, field)
 
+
 def getReference(component):
     if isinstance(component, eeschema_v6.Symbol):
         return eeschema_v6.getReference(component)
     return eeschema.getReference(component)
 
+
 def ensurePassingDrc(board):
-    failed = drc.runImpl(board,
+    failed = drc.runImpl(
+        board,
         useMm=True,
         ignoreExcluded=True,
         strict=False,
         level=ReportLevel.error,
-        yieldViolation=lambda x: print(x))
+        yieldViolation=lambda x: print(x),
+    )
     if failed:
         print("DRC failed. See report above. No files produced")
         sys.exit(1)
+
 
 def hasNonSMDPins(footprint):
     for pad in footprint.Pads():
@@ -55,21 +64,26 @@ def hasNonSMDPins(footprint):
             return True
     return False
 
+
 class FormatError(Exception):
     pass
+
 
 class FootprintOrientationHandling(Enum):
     KiCad = 0
     MirrorBottom = 1
 
+
 @dataclass
 class CorrectionPattern:
     """Single correction pattern to match a component against."""
+
     footprint: re.Pattern
     part_id: re.Pattern
     x_correction: float
     y_correction: float
     rotation: float
+
 
 def layerToSide(layer):
     if layer == pcbnew.F_Cu:
@@ -77,6 +91,7 @@ def layerToSide(layer):
     if layer == pcbnew.B_Cu:
         return "B"
     raise RuntimeError(f"Got component with invalid layer {layer}")
+
 
 def footprintPosition(footprint, placeOffset, compensation):
     pos = footprint.GetPosition() - placeOffset
@@ -86,36 +101,52 @@ def footprintPosition(footprint, placeOffset, compensation):
     pos += VECTOR2I(fromMm(x), fromMm(y))
     return pos
 
-def footprintOrientation(footprint, compensation, orientation: FootprintOrientationHandling = FootprintOrientationHandling.KiCad):
+
+def footprintOrientation(
+    footprint,
+    compensation,
+    orientation: FootprintOrientationHandling = FootprintOrientationHandling.KiCad,
+):
     if orientation == FootprintOrientationHandling.KiCad:
         return (footprint.GetOrientation().AsDegrees() + compensation[2]) % 360
     if orientation == FootprintOrientationHandling.MirrorBottom:
         if layerToSide(footprint.GetLayer()) == "B":
-            return (180 - footprint.GetOrientation().AsDegrees() + compensation[2]) % 360
+            return (
+                180 - footprint.GetOrientation().AsDegrees() + compensation[2]
+            ) % 360
         else:
             return (footprint.GetOrientation().AsDegrees() + compensation[2]) % 360
 
     raise AssertionError("Invalid orientation handling")
 
+
 def parseCompensation(compensation):
     compParts = compensation.split(";")
     if len(compParts) != 3:
-        raise FormatError(f"Invalid format of compensation '{compensation}' – there should be 3 parts, got {len(compParts)}")
+        raise FormatError(
+            f"Invalid format of compensation '{compensation}' – there should be 3 parts, got {len(compParts)}"
+        )
     try:
         comps = [float(x) for x in compParts]
         return comps
     except Exception:
-        raise FormatError(f"Invalid format of compensation '{compensation}' – items are not numbers") from None
+        raise FormatError(
+            f"Invalid format of compensation '{compensation}' – items are not numbers"
+        ) from None
+
 
 def defaultFootprintX(footprint, placeOffset, compensation):
     # Overwrite when footprint requires mirrored X when components are on the bottom side
     return toMm(footprintPosition(footprint, placeOffset, compensation)[0])
 
+
 def defaultFootprintY(footprint, placeOffset, compensation):
     return -toMm(footprintPosition(footprint, placeOffset, compensation)[1])
 
+
 def excludeFromPos(footprint):
     return footprint.GetAttributes() & pcbnew.FP_EXCLUDE_FROM_POS_FILES
+
 
 def readCorrectionPatterns(filename):
     """
@@ -152,6 +183,7 @@ def readCorrectionPatterns(filename):
             )
     return correctionPatterns
 
+
 def applyCorrectionPattern(correctionPatterns, footprint):
     # FIXME: part ID is currently ignored
     # GetUniStringLibId returns the full footprint name including the
@@ -162,12 +194,21 @@ def applyCorrectionPattern(correctionPatterns, footprint):
             return (corpat.x_correction, corpat.y_correction, corpat.rotation)
     return (0, 0, 0)
 
+
 def noFilter(footprint):
     return True
 
-def collectPosData(board, correctionFields, posFilter=lambda x : True,
-                   footprintX=defaultFootprintX, footprintY=defaultFootprintY, bom=None,
-                   correctionFile=None, orientationHandling: FootprintOrientationHandling = FootprintOrientationHandling.KiCad):
+
+def collectPosData(
+    board,
+    correctionFields,
+    posFilter=lambda x: True,
+    footprintX=defaultFootprintX,
+    footprintY=defaultFootprintY,
+    bom=None,
+    correctionFile=None,
+    orientationHandling: FootprintOrientationHandling = FootprintOrientationHandling.KiCad,
+):
     """
     Extract position data of the footprints.
 
@@ -180,7 +221,7 @@ def collectPosData(board, correctionFields, posFilter=lambda x : True,
     if bom is None:
         bom = {}
     else:
-        bom = { getReference(comp): comp for comp in bom }
+        bom = {getReference(comp): comp for comp in bom}
 
     correctionPatterns = []
     if correctionFile is not None:
@@ -193,6 +234,7 @@ def collectPosData(board, correctionFields, posFilter=lambda x : True,
             continue
         if posFilter(footprint) and footprint.GetReference() in bom:
             footprints.append(footprint)
+
     def getCompensation(footprint):
         if footprint.GetReference() not in bom:
             return 0, 0, 0
@@ -202,18 +244,25 @@ def collectPosData(board, correctionFields, posFilter=lambda x : True,
             if field is not None:
                 break
         if field is None or field == "":
-            return applyCorrectionPattern(
-                correctionPatterns,
-                footprint)
+            return applyCorrectionPattern(correctionPatterns, footprint)
         try:
             return parseCompensation(field)
         except FormatError as e:
             raise FormatError(f"{footprint.GetReference()}: {e}")
-    return [(footprint.GetReference(),
-             footprintX(footprint, placeOffset, getCompensation(footprint)),
-             footprintY(footprint, placeOffset, getCompensation(footprint)),
-             layerToSide(footprint.GetLayer()),
-             footprintOrientation(footprint, getCompensation(footprint), orientationHandling)) for footprint in footprints]
+
+    return [
+        (
+            footprint.GetReference(),
+            footprintX(footprint, placeOffset, getCompensation(footprint)),
+            footprintY(footprint, placeOffset, getCompensation(footprint)),
+            layerToSide(footprint.GetLayer()),
+            footprintOrientation(
+                footprint, getCompensation(footprint), orientationHandling
+            ),
+        )
+        for footprint in footprints
+    ]
+
 
 def posDataToFile(posData, filename):
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
@@ -222,31 +271,41 @@ def posDataToFile(posData, filename):
         for line in sorted(posData, key=lambda x: naturalComponentKey(x[0])):
             line = list(line)
             for i in [1, 2, 4]:
-                line[i] = f"{line[i]:.2f}" # Most Fab houses expect only 2 decimal digits
+                line[i] = (
+                    f"{line[i]:.2f}"  # Most Fab houses expect only 2 decimal digits
+                )
             writer.writerow(line)
+
 
 def isValidSchPath(filename):
     return os.path.splitext(filename)[1] in [".sch", ".kicad_sch"]
 
+
 def isValidBoardPath(filename):
     return os.path.splitext(filename)[1] in [".kicad_pcb"]
+
 
 def ensureValidSch(filename):
     if not isValidSchPath(filename):
         raise RuntimeError(f"The path {filename} is not a valid KiCAD schema file")
 
+
 def ensureValidBoard(filename):
     if not isValidBoardPath(filename):
         raise RuntimeError(f"The path {filename} is not a valid KiCAD PCB file")
 
+
 def expandNameTemplate(template: str, filetype: str, board: pcbnew.BOARD) -> str:
     if re.findall(r"\{.*\}", template) == []:
-        raise RuntimeError(f"The filename template '{template} must contain at least one variable name")
+        raise RuntimeError(
+            f"The filename template '{template} must contain at least one variable name"
+        )
     textVars = kikitTextVars(board, KiCADProject(board.GetFileName()).textVars)
     try:
         return template.format(filetype, **textVars)
     except KeyError as e:
         raise RuntimeError(f"Unknown variable {e} in --nametemplate: {template}")
+
 
 def naturalComponentKey(reference: str) -> Tuple[str, int]:
     text, num = splitOnReverse(reference, lambda x: x.isdigit())

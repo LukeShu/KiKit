@@ -3,14 +3,14 @@
 # 'plugin'. In order not to break the existing PCM installations we import this
 # and leave it here for at least a couple of months to ensure that everybody
 # upgrades to a new PCM package.
-from kikit.actionPlugins import importAllPlugins # type: ignore
-
 from typing import Any, Dict, Iterable
 
-from kikit.panelize import Panel
-from kikit.substrate import Substrate
 import pcbnew
 from shapely.geometry import LineString
+
+from kikit.actionPlugins import importAllPlugins  # type: ignore
+from kikit.panelize import Panel
+from kikit.substrate import Substrate
 
 Preset = Dict[str, Dict[str, Any]]
 
@@ -27,8 +27,10 @@ class HookPlugin:
     If you want to know the precise order of operation, please refer to the
     function kikit.panelize_ui:doPanelization.
     """
-    def __init__(self, userArg: str, board: pcbnew.BOARD,
-                 preset: Dict[str, Dict[str, Any]]) -> None:
+
+    def __init__(
+        self, userArg: str, board: pcbnew.BOARD, preset: Dict[str, Dict[str, Any]]
+    ) -> None:
         """
         The constructor of the hook plugin will always receive a single string
         from the user, the source design and the presets Dictionary.
@@ -59,8 +61,12 @@ class HookPlugin:
         """
         pass
 
-    def afterTabs(self, panel: Panel, tabCuts: Iterable[LineString],
-                  backboneCuts: Iterable[LineString]) -> None:
+    def afterTabs(
+        self,
+        panel: Panel,
+        tabCuts: Iterable[LineString],
+        backboneCuts: Iterable[LineString],
+    ) -> None:
         """
         This callback is invoked after the tabs have been formed.
         """
@@ -91,8 +97,17 @@ class LayoutPlugin:
     """
     This type of plugin can create user specified board layouts
     """
-    def __init__(self, preset: Preset, userArg: str, netPattern: str,
-                 refPattern: str, vspace: int, hspace: int, rotation: int) -> None:
+
+    def __init__(
+        self,
+        preset: Preset,
+        userArg: str,
+        netPattern: str,
+        refPattern: str,
+        vspace: int,
+        hspace: int,
+        rotation: int,
+    ) -> None:
         self.preset = preset
         self.userArg = userArg
         self.netPattern = netPattern
@@ -101,15 +116,18 @@ class LayoutPlugin:
         self.hspace = hspace
         self.rotation = rotation
 
-    def buildLayout(self, panel: Panel, inputFile: str,
-                    sourceArea: pcbnew.BOX2I) -> Iterable[Substrate]:
+    def buildLayout(
+        self, panel: Panel, inputFile: str, sourceArea: pcbnew.BOX2I
+    ) -> Iterable[Substrate]:
         """
         This function is supposed to build the layout (append the boards to the
         panel) and return an iterable of substrates of these boards.
         """
         raise NotImplementedError("Layout plugin has to define buildLayout")
 
-    def buildPartitionLine(self, panel: Panel, framingSubstrates: Iterable[Substrate]) -> None:
+    def buildPartitionLine(
+        self, panel: Panel, framingSubstrates: Iterable[Substrate]
+    ) -> None:
         """
         This function should build the partition line in the panel. It gets an
         iterable of extra substrates that represent soon-to-be frame of the
@@ -129,6 +147,7 @@ class FramingPlugin:
     """
     This type of plugin can build custom framing
     """
+
     def __init__(self, preset: Preset, userArg: str) -> None:
         self.preset = preset
         self.userArg = userArg
@@ -139,13 +158,17 @@ class FramingPlugin:
         """
         raise NotImplementedError("FramingPlugin has to define buildFraming")
 
-    def buildDummyFramingSubstrates(self, substrates: Iterable[Substrate]) -> Iterable[Substrate]:
+    def buildDummyFramingSubstrates(
+        self, substrates: Iterable[Substrate]
+    ) -> Iterable[Substrate]:
         """
         This function should build dummy substrates that emulate the
         soon-to-be-frame. These substrates are used for partition line
         computation.
         """
-        raise NotImplementedError("FramingPlugin has to define buildDummyFramingSubstrates")
+        raise NotImplementedError(
+            "FramingPlugin has to define buildDummyFramingSubstrates"
+        )
 
 
 class TabsPlugin:
@@ -153,6 +176,7 @@ class TabsPlugin:
     This plugin can make custom tabs. It provides two functions, however, you
     should override only one of them.
     """
+
     def __init__(self, preset: Preset, userArg: str) -> None:
         self.preset = preset
         self.userArg = userArg
@@ -162,7 +186,9 @@ class TabsPlugin:
         This function should append tabs annotations to the panel. The rendering
         will be handled automatically.
         """
-        raise NotImplementedError("Tabs plugin has to provide buildTabAnnotations when it doesn't override buildTabs")
+        raise NotImplementedError(
+            "Tabs plugin has to provide buildTabAnnotations when it doesn't override buildTabs"
+        )
 
     def buildTabs(self, panel: Panel) -> Iterable[LineString]:
         """
@@ -173,11 +199,13 @@ class TabsPlugin:
         self.buildTabAnnotations(panel)
         return panel.buildTabsFromAnnotations(self.preset["tabs"]["fillet"])
 
+
 class CutsPlugin:
     """
     This plugin renders tabs (LineStrings) into board features. The cuts are
     divided into two types so you can, e.g., inset you tab cuts.
     """
+
     def __init__(self, preset: Preset, userArg: str) -> None:
         self.preset = preset
         self.userArg = userArg
@@ -199,6 +227,7 @@ class ToolingPlugin:
     """
     This plugin places tooling holes on the board frame.
     """
+
     def __init__(self, preset: Preset, userArg: str) -> None:
         self.preset = preset
         self.userArg = userArg
@@ -209,10 +238,12 @@ class ToolingPlugin:
         """
         raise NotImplementedError("Tooling plugin has to provide buildTooling")
 
+
 class FiducialsPlugin:
     """
     This plugin places fiducials holes on the board frame.
     """
+
     def __init__(self, preset: Preset, userArg: str) -> None:
         self.preset = preset
         self.userArg = userArg
@@ -223,10 +254,12 @@ class FiducialsPlugin:
         """
         raise NotImplementedError("Fiducials plugin has to provide buildFiducials")
 
+
 class TextVariablePlugin:
     """
     This plugin provides text variables the user can use in text fields.
     """
+
     def __init__(self, board: pcbnew.BOARD) -> None:
         self.board = board
 

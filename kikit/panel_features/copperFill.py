@@ -1,22 +1,24 @@
 from dataclasses import dataclass, field
-from ..substrate import linestringToKicad
-from ..defs import Layer
-from ..common import KiAngle, KiLength, fromDegrees, fromMm
-from ..pcbnew_utils import duplicateZone, increaseZonePriorities
-import pcbnew
-from ..panelize import Panel
-from .baseFeature import PanelFeature
 from typing import Any, List, Tuple
+
 import numpy as np
-from shapely.geometry import (
-    Polygon,
-    MultiPolygon)
+import pcbnew
+from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
+
+from ..common import KiAngle, KiLength, fromDegrees, fromMm
+from ..defs import Layer
+from ..panelize import Panel
+from ..pcbnew_utils import duplicateZone, increaseZonePriorities
+from ..substrate import linestringToKicad
+from .baseFeature import PanelFeature
+
 
 class KiCADCopperFillMixin(PanelFeature):
     """
     Build solid infill of non-board areas
     """
+
     def _adjustZoneParameters(self, zone: pcbnew.ZONE):
         """
         Allow an inherited class to override KiCAD zone parameters
@@ -29,9 +31,14 @@ class KiCADCopperFillMixin(PanelFeature):
         increaseZonePriorities(panel.board)
 
         zoneArea = panel.boardSubstrate.substrates.buffer(-self.edgeclearance)
-        zoneArea = zoneArea.difference(unary_union(
-            [substrate.exterior().buffer(self.clearance) for substrate in panel.substrates]
-        ))
+        zoneArea = zoneArea.difference(
+            unary_union(
+                [
+                    substrate.exterior().buffer(self.clearance)
+                    for substrate in panel.substrates
+                ]
+            )
+        )
 
         geoms = [zoneArea] if isinstance(zoneArea, Polygon) else zoneArea.geoms
 
@@ -59,12 +66,13 @@ class SolidCopperFill(KiCADCopperFillMixin):
     """
     Build solid infill of non-board areas
     """
+
     clearance: KiLength = field(default_factory=lambda: fromMm(1))
     edgeclearance: KiLength = field(default_factory=lambda: fromMm(1))
     layers: List[Layer] = field(default_factory=lambda: [Layer.F_Cu, Layer.B_Cu])
 
     def _adjustZoneParameters(self, zone: pcbnew.ZONE) -> None:
-        pass # There are no adjustments for solid infill
+        pass  # There are no adjustments for solid infill
 
 
 @dataclass
@@ -72,6 +80,7 @@ class HatchedCopperFill(KiCADCopperFillMixin):
     """
     Build hatched infill of non-board areas
     """
+
     clearance: KiLength = field(default_factory=lambda: fromMm(1))
     edgeclearance: KiLength = field(default_factory=lambda: fromMm(1))
     layers: List[Layer] = field(default_factory=lambda: [Layer.F_Cu, Layer.B_Cu])
@@ -85,11 +94,13 @@ class HatchedCopperFill(KiCADCopperFillMixin):
         zoneContainer.SetHatchGap(self.strokeSpacing)
         zoneContainer.SetHatchThickness(self.strokeWidth)
 
+
 @dataclass
 class HexCopperFill(PanelFeature):
     """
     Build hex infill of non-board areas
     """
+
     clearance: KiLength = field(default_factory=lambda: fromMm(1))
     edgeclearance: KiLength = field(default_factory=lambda: fromMm(1))
     layers: List[Layer] = field(default_factory=lambda: [Layer.F_Cu, Layer.B_Cu])
@@ -97,7 +108,9 @@ class HexCopperFill(PanelFeature):
     space: KiLength = field(default_factory=lambda: fromMm(0.5))
     threshold: float = field(default_factory=lambda: 0.25)
 
-    def _buildHexagonsPolygon(self, area: Tuple[float, float, float, float]) -> MultiPolygon:
+    def _buildHexagonsPolygon(
+        self, area: Tuple[float, float, float, float]
+    ) -> MultiPolygon:
         horizontalSpacing = self.space + np.sqrt(3) / 2 * self.diameter
         verticalSpacing = 3 / 4 * self.diameter + np.sqrt(3) / 2 * self.space
 
@@ -112,10 +125,19 @@ class HexCopperFill(PanelFeature):
         while y <= maxy:
             x = minx - (horizontalSpacing / 2 if shifted else 0)
             while x <= maxx:
-                hexagons.append(Polygon([
-                    (x + self.diameter / 2 * np.cos(np.pi / 6 + i / 3 * np.pi),
-                     y + self.diameter / 2 * np.sin(np.pi / 6 + i / 3 * np.pi)) for i in range(6)
-                ]))
+                hexagons.append(
+                    Polygon(
+                        [
+                            (
+                                x
+                                + self.diameter / 2 * np.cos(np.pi / 6 + i / 3 * np.pi),
+                                y
+                                + self.diameter / 2 * np.sin(np.pi / 6 + i / 3 * np.pi),
+                            )
+                            for i in range(6)
+                        ]
+                    )
+                )
                 x += horizontalSpacing
             y += verticalSpacing
             shifted = not shifted
@@ -130,9 +152,14 @@ class HexCopperFill(PanelFeature):
 
         zoneArea = panel.boardSubstrate.substrates.buffer(-self.edgeclearance)
         zoneArea = zoneArea.intersection(panel.boardSubstrate.substrates)
-        zoneArea = zoneArea.difference(unary_union(
-            [substrate.exterior().buffer(self.clearance) for substrate in panel.substrates]
-        ))
+        zoneArea = zoneArea.difference(
+            unary_union(
+                [
+                    substrate.exterior().buffer(self.clearance)
+                    for substrate in panel.substrates
+                ]
+            )
+        )
 
         hexagons = self._buildHexagonsPolygon(zoneArea.bounds)
         hexagons = hexagons.intersection(zoneArea)

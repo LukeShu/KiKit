@@ -1,9 +1,10 @@
-from typing import Union, Optional, Dict, Any
+import json
+from functools import cached_property
 from pathlib import Path
 from string import Template
-from functools import cached_property
+from typing import Any, Dict, Optional, Union
+
 import pcbnew
-import json
 
 
 class KiCADProject:
@@ -11,18 +12,21 @@ class KiCADProject:
     This code represents a KiCAD project and allows easy access to individual
     files without the need to hassle with project names.
     """
+
     def __init__(self, path: Union[str, Path]) -> None:
         self.projectdir: Path = Path(path).resolve()
         name = None
         if str(path).endswith(".kicad_pro"):
-            name = self.projectdir.name[:-len(".kicad_pro")]
+            name = self.projectdir.name[: -len(".kicad_pro")]
             self.projectdir = self.projectdir.parent
         elif str(path).endswith(".kicad_pcb"):
-            name = self.projectdir.name[:-len(".kicad_pcb")]
+            name = self.projectdir.name[: -len(".kicad_pcb")]
             self.projectdir = self.projectdir.parent
         else:
             if not self.projectdir.is_dir():
-                raise RuntimeError(f"The project directory {self.projectdir} is not a directory")
+                raise RuntimeError(
+                    f"The project directory {self.projectdir} is not a directory"
+                )
             name = self._resolveProjectName(self.projectdir)
         self._name: str = name
 
@@ -33,12 +37,14 @@ class KiCADProject:
             if not item.name.endswith(".kicad_pro"):
                 continue
             if candidate is not None:
-                raise RuntimeError(f"There are multiple projects ({candidate} " +
-                                   f"and {item.name}) in directory {path}. Not " +
-                                   f"clear which one to choose.")
+                raise RuntimeError(
+                    f"There are multiple projects ({candidate} "
+                    + f"and {item.name}) in directory {path}. Not "
+                    + f"clear which one to choose."
+                )
             candidate = item.name
         if candidate is not None:
-            return candidate[:-len(".kicad_pro")]
+            return candidate[: -len(".kicad_pro")]
         raise RuntimeError(f"No project found in {path}")
 
     @property
@@ -67,7 +73,9 @@ class KiCADProject:
         try:
             return Template(text).substitute(self.textVars)
         except KeyError as e:
-            raise RuntimeError(f"Requested text '{text}' expects project variable '{e}' which is missing") from None
+            raise RuntimeError(
+                f"Requested text '{text}' expects project variable '{e}' which is missing"
+            ) from None
 
     @property
     def board(self) -> pcbnew.BOARD:

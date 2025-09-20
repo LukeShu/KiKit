@@ -1,6 +1,7 @@
 import datetime as dt
 from string import Template
-from typing import Callable, Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
+
 import pcbnew
 
 
@@ -8,7 +9,8 @@ class Formatter:
     """
     Turns a function into a formatter. Caches the result.
     """
-    def __init__(self, fn: Callable[[], str], vars: Dict[str, str]={}) -> None:
+
+    def __init__(self, fn: Callable[[], str], vars: Dict[str, str] = {}) -> None:
         self.fn = fn
         self.value: Optional[str] = None
         self.vars = vars
@@ -22,9 +24,12 @@ class Formatter:
         try:
             return Template(string).substitute(self.vars)
         except KeyError as e:
-            raise RuntimeError(f"Requested text '{string}' expects project variable '{e}' which is missing") from None
+            raise RuntimeError(
+                f"Requested text '{string}' expects project variable '{e}' which is missing"
+            ) from None
 
-def kikitTextVars(board: pcbnew.BOARD, vars: Dict[str, str]={}) -> Dict[str, Any]:
+
+def kikitTextVars(board: pcbnew.BOARD, vars: Dict[str, str] = {}) -> Dict[str, Any]:
     availableVars: Dict[str, Formatter] = {
         "date": Formatter(lambda: dt.datetime.today().strftime("%Y-%m-%d"), vars),
         "time24": Formatter(lambda: dt.datetime.today().strftime("%H:%M"), vars),
@@ -37,11 +42,13 @@ def kikitTextVars(board: pcbnew.BOARD, vars: Dict[str, str]={}) -> Dict[str, Any
         "boardTitle": Formatter(lambda: board.GetTitleBlock().GetTitle(), vars),
         "boardDate": Formatter(lambda: board.GetTitleBlock().GetDate(), vars),
         "boardRevision": Formatter(lambda: board.GetTitleBlock().GetRevision(), vars),
-        "boardCompany": Formatter(lambda: board.GetTitleBlock().GetCompany(), vars)
+        "boardCompany": Formatter(lambda: board.GetTitleBlock().GetCompany(), vars),
     }
 
     for i in range(10):
-        availableVars[f"boardComment{i + 1}"] = Formatter(lambda x = i: board.GetTitleBlock().GetComment(x), vars)
+        availableVars[f"boardComment{i + 1}"] = Formatter(
+            lambda x=i: board.GetTitleBlock().GetComment(x), vars
+        )
 
     for var, value in vars.items():
         availableVars[f"user-{var}"] = value

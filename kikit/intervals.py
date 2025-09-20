@@ -1,15 +1,19 @@
 from __future__ import annotations
+
 import typing
-from typing import Any, Dict, List, Optional, Union, Tuple, Callable, Iterable
-from kikit.typing import Box, T, ComparableT
-from itertools import islice, chain
-from math import isclose
 from copy import copy
+from itertools import chain, islice
+from math import isclose
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+
+from kikit.typing import Box, ComparableT, T
+
 
 class Interval:
     """
     Basic interval representation
     """
+
     def __init__(self, a: float, b: float) -> None:
         self.min = min(a, b)
         self.max = max(a, b)
@@ -43,8 +47,11 @@ class Interval:
         return self.max - self.min
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Interval) and \
-               isclose(self.min, other.min) and isclose(self.max, other.max)
+        return (
+            isinstance(other, Interval)
+            and isclose(self.min, other.min)
+            and isclose(self.max, other.max)
+        )
 
     def __repr__(self) -> str:
         return f"I({self.min}, {self.max})"
@@ -52,13 +59,13 @@ class Interval:
     def __str__(self) -> str:
         return f"<{self.min}, {self.max}>"
 
+
 class IntervalList:
     def __init__(self, intervals: List[Interval]) -> None:
         self.intervals = self._normalize(self._toList(intervals))
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, IntervalList) and \
-               self.intervals == self._toList(other)
+        return isinstance(other, IntervalList) and self.intervals == self._toList(other)
 
     def __repr__(self) -> str:
         return f"IL[ {', '.join([x.__repr__() for x in self.intervals])} ]"
@@ -70,7 +77,9 @@ class IntervalList:
         return len(self.intervals) == 0
 
     @staticmethod
-    def _toList(object: Union[Interval, List[Interval], IntervalList]) -> List[Interval]:
+    def _toList(
+        object: Union[Interval, List[Interval], IntervalList],
+    ) -> List[Interval]:
         """
         Convert the object into a list of intervals
         """
@@ -100,7 +109,9 @@ class IntervalList:
         return newIntervals
 
     @staticmethod
-    def _eventList(intervals0: List[Interval], intervals1: List[Interval]) -> List[Tuple[int, float, int]]:
+    def _eventList(
+        intervals0: List[Interval], intervals1: List[Interval]
+    ) -> List[Tuple[int, float, int]]:
         """
         Build event list; event is a tuple (1/0, x, event). Event +1 means open
         interval, -1 means close interval. The events are sorted by x
@@ -140,13 +151,13 @@ class IntervalList:
         aOpen = 0
         bOpen = 0
         for ident, p, e in self._eventList(self.intervals, self._toList(other)):
-            if (ident == 0 and e == 1) and bOpen == 0: # Rising A, no B
+            if (ident == 0 and e == 1) and bOpen == 0:  # Rising A, no B
                 start = p
-            if (ident == 1 and e == -1) and aOpen == 1: # Falling B, A is on
+            if (ident == 1 and e == -1) and aOpen == 1:  # Falling B, A is on
                 start = p
-            if (ident == 0 and e == -1) and bOpen == 0: # Falling A, no B
+            if (ident == 0 and e == -1) and bOpen == 0:  # Falling A, no B
                 intervals.append(Interval(start, p))
-            if (ident == 1 and e == 1) and aOpen == 1: # Raising B, A is on
+            if (ident == 1 and e == 1) and aOpen == 1:  # Raising B, A is on
                 intervals.append(Interval(start, p))
             if ident == 0:
                 aOpen += e
@@ -156,6 +167,7 @@ class IntervalList:
             assert bOpen >= 0 and bOpen <= 1
         return IntervalList(intervals)
 
+
 class BoxNeighbors:
     """
     Given a set of axially arranged non-overlapping boxes answers the query for
@@ -164,6 +176,7 @@ class BoxNeighbors:
     Neighbor is defined as the closest box in a given direction that has
     non-empty intersection of their projections in the given direction.
     """
+
     def __init__(self, boxes: Dict[object, Box]) -> None:
         """
         Given a dictionary id -> box initializes the structure.
@@ -183,15 +196,19 @@ class BoxNeighbors:
         self._bottomQ = self._computeQuery(bottomList)
 
     @staticmethod
-    def _prepareProjection(getInterval: Callable[[Box], Interval],
-                           getDistance: Callable[[Box], float],
-                           boxes: Dict[object, Box]) -> List[Tuple[object, Interval, float]]:
+    def _prepareProjection(
+        getInterval: Callable[[Box], Interval],
+        getDistance: Callable[[Box], float],
+        boxes: Dict[object, Box],
+    ) -> List[Tuple[object, Interval, float]]:
         x = [(ident, getInterval(b), getDistance(b)) for ident, b in boxes.items()]
         x.sort(key=lambda t: t[2])
         return x
 
     @staticmethod
-    def _computeQuery(list: List[Tuple[object, Interval, float]]) -> Dict[object, List[Tuple[object, IntervalList]]]:
+    def _computeQuery(
+        list: List[Tuple[object, Interval, float]],
+    ) -> Dict[object, List[Tuple[object, IntervalList]]]:
         neighbors = {}
         for i, (ident, interval, pos) in enumerate(list):
             n: List[Tuple[object, IntervalList]] = []
@@ -241,7 +258,10 @@ class AxialLine(Interval):
     """
     Representation of a horizontal or vertical line
     """
-    def __init__(self, x: float, y1: float, y2: float, tag: Optional[Any]=None) -> None:
+
+    def __init__(
+        self, x: float, y1: float, y2: float, tag: Optional[Any] = None
+    ) -> None:
         super().__init__(y1, y2)
         self.x = x
         self.tag = tag
@@ -254,12 +274,15 @@ class AxialLine(Interval):
             return [self]
         return [
             AxialLine(self.x, self.min, y, self.tag),
-            AxialLine(self.x, y, self.max, self.tag)
+            AxialLine(self.x, y, self.max, self.tag),
         ]
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, AxialLine) and \
-               isclose(self.x, other.x) and super().__eq__(other)
+        return (
+            isinstance(other, AxialLine)
+            and isclose(self.x, other.x)
+            and super().__eq__(other)
+        )
 
     def __repr__(self) -> str:
         return f"Line[{self.tag}]({self.x}, {self.min}, {self.max})"
@@ -267,11 +290,13 @@ class AxialLine(Interval):
     def __hash__(self) -> int:
         return hash((self.x, self.min, self.max, self.tag))
 
+
 class ShadowLine:
     """
     Represents a horizontal or vertical line with a shadow (possible
     prolongation)
     """
+
     def __init__(self, line: AxialLine, shadow: Interval) -> None:
         assert isinstance(line, AxialLine)
         assert isinstance(shadow, Interval)
@@ -280,15 +305,18 @@ class ShadowLine:
 
     @property
     def shadowLine(self) -> AxialLine:
-        return AxialLine(self.line.x, self.shadow.min, self.shadow.max,
-            self.line.tag)
+        return AxialLine(self.line.x, self.shadow.min, self.shadow.max, self.line.tag)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, ShadowLine) and \
-               self.line == other.line and self.shadow == other.shadow
+        return (
+            isinstance(other, ShadowLine)
+            and self.line == other.line
+            and self.shadow == other.shadow
+        )
 
     def __repr__(self) -> str:
         return f"Shadow({self.line.__repr__()}, {self.shadow.__repr__()})"
+
 
 def collectBoxEdges(box: Box) -> Tuple[List[AxialLine], List[AxialLine]]:
     """
@@ -296,8 +324,9 @@ def collectBoxEdges(box: Box) -> Tuple[List[AxialLine], List[AxialLine]]:
     """
     return (
         [AxialLine(box[1], box[0], box[2]), AxialLine(box[3], box[0], box[2])],
-        [AxialLine(box[0], box[1], box[3]), AxialLine(box[2], box[1], box[3])]
+        [AxialLine(box[0], box[1], box[3]), AxialLine(box[2], box[1], box[3])],
     )
+
 
 def collectHardStops(boxes: Iterable[Box]) -> Tuple[List[AxialLine], List[AxialLine]]:
     """
@@ -323,11 +352,17 @@ def collectHardStops(boxes: Iterable[Box]) -> Tuple[List[AxialLine], List[AxialL
     vedges.update(v)
     return list(hedges), list(vedges)
 
-def defaultSeedFilter(boxIdA: object, boxIdB: object, vertical: bool, seedline: AxialLine) -> bool:
+
+def defaultSeedFilter(
+    boxIdA: object, boxIdB: object, vertical: bool, seedline: AxialLine
+) -> bool:
     return True
 
-def collectSeedLines(boxes: Dict[object, Box], seedFilter: Callable[[object, object, bool, AxialLine], bool]) \
-        -> Tuple[List[AxialLine], List[AxialLine]]:
+
+def collectSeedLines(
+    boxes: Dict[object, Box],
+    seedFilter: Callable[[object, object, bool, AxialLine], bool],
+) -> Tuple[List[AxialLine], List[AxialLine]]:
     """
     Given a dictionary ident -> box return a list of all midlines between
     neighboring boxes.
@@ -344,31 +379,42 @@ def collectSeedLines(boxes: Dict[object, Box], seedFilter: Callable[[object, obj
     for identA, boxA in boxes.items():
         for identB, shadow in neighbors.leftC(identA):
             mid = (boxA[0] + boxes[identB][2]) / 2
-            candidates = [AxialLine(mid, e.min, e.max, identA)
-                for e in shadow.intervals]
-            verlines.extend([x for x in candidates
-                if seedFilter(identA, identB, True, x)])
+            candidates = [
+                AxialLine(mid, e.min, e.max, identA) for e in shadow.intervals
+            ]
+            verlines.extend(
+                [x for x in candidates if seedFilter(identA, identB, True, x)]
+            )
         for identB, shadow in neighbors.rightC(identA):
             mid = (boxA[2] + boxes[identB][0]) / 2
-            candidates = [AxialLine(mid, e.min, e.max, identA)
-                for e in shadow.intervals]
-            verlines.extend([x for x in candidates
-                if seedFilter(identA, identB, True, x)])
+            candidates = [
+                AxialLine(mid, e.min, e.max, identA) for e in shadow.intervals
+            ]
+            verlines.extend(
+                [x for x in candidates if seedFilter(identA, identB, True, x)]
+            )
         for identB, shadow in neighbors.topC(identA):
             mid = (boxA[1] + boxes[identB][3]) / 2
-            candidates = [AxialLine(mid, e.min, e.max, identA)
-                for e in shadow.intervals]
-            horlines.extend([x for x in candidates
-                if seedFilter(identA, identB, False, x)])
+            candidates = [
+                AxialLine(mid, e.min, e.max, identA) for e in shadow.intervals
+            ]
+            horlines.extend(
+                [x for x in candidates if seedFilter(identA, identB, False, x)]
+            )
         for identB, shadow in neighbors.bottomC(identA):
             mid = (boxA[3] + boxes[identB][1]) / 2
-            candidates = [AxialLine(mid, e.min, e.max, identA)
-                for e in shadow.intervals]
-            horlines.extend([x for x in candidates
-                if seedFilter(identA, identB, False, x)])
+            candidates = [
+                AxialLine(mid, e.min, e.max, identA) for e in shadow.intervals
+            ]
+            horlines.extend(
+                [x for x in candidates if seedFilter(identA, identB, False, x)]
+            )
     return horlines, verlines
 
-def upperBound(sortedCollection: List[T], item: ComparableT, key: Callable[[T], ComparableT]) -> int:
+
+def upperBound(
+    sortedCollection: List[T], item: ComparableT, key: Callable[[T], ComparableT]
+) -> int:
     """
     Given a sorted collection, perform binary search to find element x for which
     the following holds: item < key(x) and the value key(x) is the smallest.
@@ -384,7 +430,10 @@ def upperBound(sortedCollection: List[T], item: ComparableT, key: Callable[[T], 
             lo = mid + 1
     return lo
 
-def lowerBound(sortedCollection: List[T], item: ComparableT, key: Callable[[T], ComparableT]) -> int:
+
+def lowerBound(
+    sortedCollection: List[T], item: ComparableT, key: Callable[[T], ComparableT]
+) -> int:
     """
     Given a sorted collection, perform binary search to find element x for which
     the following holds: item > key(x) and the value key(x) is the largest.
@@ -400,7 +449,10 @@ def lowerBound(sortedCollection: List[T], item: ComparableT, key: Callable[[T], 
             hi = mid
     return lo - 1
 
-def buildShadows(lines: Iterable[AxialLine], boundaries: Iterable[AxialLine]) -> List[ShadowLine]:
+
+def buildShadows(
+    lines: Iterable[AxialLine], boundaries: Iterable[AxialLine]
+) -> List[ShadowLine]:
     """
     Given an iterable of AxialLines, build their prolonged shadows. Shadows
     stop at the boundaries. Lines and boundaries are expected to be
@@ -422,7 +474,7 @@ def buildShadows(lines: Iterable[AxialLine], boundaries: Iterable[AxialLine]) ->
         # Extend to left
         leftStart = upperBound(boundaries, l.min, key=lambda line: line.x)
         for i in range(leftStart, 0, -1):
-            b  = boundaries[i]
+            b = boundaries[i]
             if l.x in b and b.x < l.max:
                 leftExtend = b.x
                 break
@@ -431,7 +483,10 @@ def buildShadows(lines: Iterable[AxialLine], boundaries: Iterable[AxialLine]) ->
         shadowLines.append(ShadowLine(l, Interval(leftExtend, rightExtend)))
     return shadowLines
 
-def trimShadows(shadows: Iterable[ShadowLine], boundaries: Iterable[AxialLine]) -> List[ShadowLine]:
+
+def trimShadows(
+    shadows: Iterable[ShadowLine], boundaries: Iterable[AxialLine]
+) -> List[ShadowLine]:
     """
     Given an iterable of ShadowLines and Axial lines as boudaries, trim the
     shadows so they do not cross any boundary. Return new shadows.
@@ -459,6 +514,7 @@ def trimShadows(shadows: Iterable[ShadowLine], boundaries: Iterable[AxialLine]) 
         newShadows.append(ShadowLine(l.line, Interval(leftTrim, rightTrim)))
     return newShadows
 
+
 class BoxPartitionLines:
     """
     Given a set of axially arranged non-overlapping boxes answers the query for
@@ -478,9 +534,15 @@ class BoxPartitionLines:
     +---+ | +----+   |   +----+
     """
 
-    def __init__(self, boxes: Dict[object, Box],
-                 seedFilter: Callable[[object, object, bool, AxialLine], bool]=defaultSeedFilter,
-                 safeHorizontalMargin: float=0, safeVerticalMargin: float=0) -> None:
+    def __init__(
+        self,
+        boxes: Dict[object, Box],
+        seedFilter: Callable[
+            [object, object, bool, AxialLine], bool
+        ] = defaultSeedFilter,
+        safeHorizontalMargin: float = 0,
+        safeVerticalMargin: float = 0,
+    ) -> None:
         """
         Given a dictionary id -> box initializes the structure.
 
@@ -492,24 +554,34 @@ class BoxPartitionLines:
         from kikit.common import shpBBoxExpand
 
         hstops, vstops = collectHardStops(boxes.values())
-        hSafeStops, vSafeStops = collectHardStops([
-            shpBBoxExpand(x, safeVerticalMargin, safeHorizontalMargin) for x in boxes.values()])
+        hSafeStops, vSafeStops = collectHardStops(
+            [
+                shpBBoxExpand(x, safeVerticalMargin, safeHorizontalMargin)
+                for x in boxes.values()
+            ]
+        )
         hseeds, vseeds = collectSeedLines(boxes, seedFilter)
         hshadows = buildShadows(hseeds, chain(vstops, vSafeStops))
         vshadows = buildShadows(vseeds, chain(hstops, hSafeStops))
 
-        hPartition = trimShadows(hshadows, chain(
-            [x.shadowLine for x in vshadows], vSafeStops))
-        vPartition = trimShadows(vshadows, chain(
-            [x.shadowLine for x in hshadows], hSafeStops))
+        hPartition = trimShadows(
+            hshadows, chain([x.shadowLine for x in vshadows], vSafeStops)
+        )
+        vPartition = trimShadows(
+            vshadows, chain([x.shadowLine for x in hshadows], hSafeStops)
+        )
 
-        self.query: Dict[object, Tuple[List[AxialLine], List[AxialLine]]] = { ident: ([], []) for ident in boxes.keys() }
+        self.query: Dict[object, Tuple[List[AxialLine], List[AxialLine]]] = {
+            ident: ([], []) for ident in boxes.keys()
+        }
         for l in hPartition:
             self.query[l.line.tag][0].append(
-                AxialLine(l.line.x, l.shadow.min, l.shadow.max))
+                AxialLine(l.line.x, l.shadow.min, l.shadow.max)
+            )
         for l in vPartition:
             self.query[l.line.tag][1].append(
-                AxialLine(l.line.x, l.shadow.min, l.shadow.max))
+                AxialLine(l.line.x, l.shadow.min, l.shadow.max)
+            )
 
     def partitionLines(self, ident: object) -> Tuple[List[AxialLine], List[AxialLine]]:
         """
@@ -530,7 +602,7 @@ class BoxPartitionLines:
         for v in vars["vstops"]:
             plt.vlines(v.x, v.min, v.max, ["g"])
 
-        plt.axis('equal')
+        plt.axis("equal")
         for h in vars["hshadows"]:
             plt.hlines(h.line.x, h.shadow.min, h.shadow.max, ["r"])
         for v in vars["vshadows"]:

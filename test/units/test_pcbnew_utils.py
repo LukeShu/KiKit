@@ -1,7 +1,8 @@
 import importlib
-import pcbnew
-import kikit
 
+import pcbnew
+
+import kikit
 from kikit.pcbnew_utils import duplicateZone
 
 

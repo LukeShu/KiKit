@@ -1,7 +1,9 @@
-import wx
 import threading
 
+import wx
+
 app = None
+
 
 def initDialog(initFn):
     global app
@@ -19,6 +21,7 @@ def initDialog(initFn):
             return initFn()
         except Exception as e:
             raise e from None
+
 
 def destroyDialog(dialog):
     if dialog is not None:
