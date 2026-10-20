@@ -31,7 +31,7 @@ setuptools.setup(
         "markdown2>=2.4",
         "pybars3>=0.9",
         "solidpython>=1.1.2",
-        "commentjson>=0.9"
+        "commentjson>=0.9",
     ],
     extras_require={
         "dev": [
@@ -51,7 +51,7 @@ setuptools.setup(
     entry_points = {
         "console_scripts": [
             "kikit=kikit.ui:cli",
-            "kikit-info=kikit.info:cli"
+            "kikit-info=kikit.info:cli",
         ],
-    }
+    },
 )

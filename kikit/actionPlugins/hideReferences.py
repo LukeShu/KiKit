@@ -298,5 +298,5 @@ if __name__ == "__main__":
     dialog = initDialog(lambda: HideReferencesDialog(
                             {},
                             board=pcbnew.LoadBoard(sys.argv[1]),
-                            updateState=print))
+                            updateState=print,))
     dialog.ShowModal()

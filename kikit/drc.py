@@ -367,7 +367,7 @@ def serializeExclusion(exclusion: DrcExclusion) -> str:
     return "|".join([
         str(exclusion.type),
         str(exclusion.position[0]),
-        str(exclusion.position[1])] + objIds
+        str(exclusion.position[1]),] + objIds
     )
 
 def readBoardDrcExclusions(board: pcbnew.BOARD) -> List[DrcExclusion]:

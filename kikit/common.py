@@ -15,8 +15,10 @@ import shapely.geometry
 
 PKG_BASE = os.path.dirname(__file__)
 KIKIT_LIB = os.path.join(PKG_BASE, "resources/kikit.pretty")
-SHP_EPSILON = pcbnew.FromMM(0.001) # Common factor of enlarging substrates to
-                                   # cover up numerical imprecisions of Shapely
+
+# Common factor of enlarging substrates to
+# cover up numerical imprecisions of Shapely
+SHP_EPSILON = pcbnew.FromMM(0.001)
 
 KiLength = int
 KiAngle = EDA_ANGLE
@@ -234,7 +236,7 @@ def shpBBoxMerge(a: Box, b: Box) -> Box:
         min(a[0], b[0]),
         min(a[1], b[1]),
         max(a[2], b[2]),
-        max(a[3], b[3])
+        max(a[3], b[3]),
     )
 
 def shpBBoxExpand(box: Box, x: float, y: Optional[float]=None) -> Box:
@@ -249,7 +251,7 @@ def shpBBoxExpand(box: Box, x: float, y: Optional[float]=None) -> Box:
 def shpBoxToRect(box):
     box = list([int(x) for x in box])
     return BOX2I(toKiCADPoint((box[0], box[1])),
-                 toKiCADPoint((box[2] - box[0], box[3] - box[1])))
+                 toKiCADPoint((box[2] - box[0], box[3] - box[1])),)
 
 def rectToShpBox(rect):
     return shapely.geometry.box(rect.GetX(), rect.GetY(),

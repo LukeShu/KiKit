@@ -145,7 +145,7 @@ class ParameterWidgetBase:
         self.label = wx.StaticText(parent,
                                    label=name,
                                    size=wx.Size(150, -1),
-                                   style=wx.ALIGN_RIGHT)
+                                   style=wx.ALIGN_RIGHT,)
         self.label.SetToolTip(parameter.description)
         self.fresh = True
 
@@ -410,10 +410,10 @@ class PanelizeDialog(wx.Dialog):
 
         sections = {
             "Input": {
-                "Input file": SInputFile("*.kicad_pcb")
+                "Input file": SInputFile("*.kicad_pcb"),
             },
             "Output": {
-                "Output file": SOuputFile("*.kicad_pcb")
+                "Output file": SOuputFile("*.kicad_pcb"),
             }
         }
         sections.update(kikit.panelize_ui_sections.availableSections)
