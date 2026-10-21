@@ -44,6 +44,8 @@ setuptools.setup(
             "mypy",
             "matplotlib",
             "types-setuptools",
+            "types-shapely",
+            "types-wxpython",
         ],
     },
     zip_safe=False,

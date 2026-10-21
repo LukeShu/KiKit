@@ -1,22 +1,40 @@
 from __future__ import annotations
 
+import collections.abc
 import csv
 import io
 import os
 import sys
 import traceback
+import typing
 from itertools import chain, islice, product
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pcbnew
 import shapely.geometry
+import shapely.geometry.base
+import shapely.ops
 from pcbnew import BOX2I, EDA_ANGLE, VECTOR2I
 from shapely.geometry import LinearRing
 
 from kikit.defs import Layer
 from kikit.intervals import AxialLine
 from kikit.typing import Box
+
+_T = typing.TypeVar("_T")
+_T_co = typing.TypeVar("_T_co", covariant=True)
+_ShpPoint = Tuple[float, ...]
+_NPVector: typing.TypeAlias = (
+    "np.ndarray[Tuple[typing.Literal[2]], np.dtype[np.float64]]"
+)
+
+
+@typing.runtime_checkable
+class _BareSequence(typing.Protocol[_T_co]):
+    def __len__(self) -> int: ...
+    def __getitem__(self, i: int, /) -> _T_co: ...
+
 
 PKG_BASE = os.path.dirname(__file__)
 KIKIT_LIB = os.path.join(PKG_BASE, "resources/kikit.pretty")
@@ -30,7 +48,7 @@ KiAngle = EDA_ANGLE
 KiPoint = VECTOR2I
 
 
-def fromDegrees(angle: Union[float, int]) -> KiAngle:
+def fromDegrees(angle: float) -> KiAngle:
     """Convert angle in degrees to Kicad angle representation"""
     return EDA_ANGLE(angle, pcbnew.DEGREES_T)
 
@@ -45,13 +63,13 @@ def toMm(kiUnits: KiLength) -> float:
     return pcbnew.ToMM(int(kiUnits))
 
 
-def toKiCADPoint(p) -> KiPoint:
+def toKiCADPoint(p: _BareSequence[float]) -> KiPoint:
     """Convert tuple or array like objects to KiCAD point (VECTOR2I)"""
     assert len(p) == 2
-    return VECTOR2I(*[int(x) for x in p])
+    return VECTOR2I(int(p[0]), int(p[1]))
 
 
-def fitsIn(what: Union[BOX2I, VECTOR2I], where: BOX2I) -> bool:
+def fitsIn(what: Union[BOX2I, VECTOR2I, pcbnew.wxPoint], where: BOX2I) -> bool:
     """
     Return true iff 'what' (BOX2I or VECTOR2I) is fully contained in 'where'
     (BOX2I)
@@ -73,7 +91,7 @@ def fitsIn(what: Union[BOX2I, VECTOR2I], where: BOX2I) -> bool:
         )
 
 
-def combineBoundingBoxes(a, b):
+def combineBoundingBoxes(a: BOX2I, b: BOX2I) -> BOX2I:
     """Retrun BOX2I as a combination of source bounding boxes"""
     x1 = min(a.GetX(), b.GetX())
     y1 = min(a.GetY(), b.GetY())
@@ -82,9 +100,13 @@ def combineBoundingBoxes(a, b):
     return BOX2I(toKiCADPoint((x1, y1)), toKiCADPoint((x2 - x1, y2 - y1)))
 
 
-def collectEdges(board, layerId, sourceArea=None):
+def collectEdges(
+    board: pcbnew.BOARD,
+    layerId: Union["pcbnew._PCB_LAYER_ID", Layer],
+    sourceArea: Optional[BOX2I] = None,
+) -> List[pcbnew.PCB_SHAPE]:
     """Collect edges in sourceArea on given layer including footprints"""
-    edges = []
+    edges: List[pcbnew.PCB_SHAPE] = []
     for edge in chain(
         board.GetDrawings(), *[m.GraphicalItems() for m in board.GetFootprints()]
     ):
@@ -95,23 +117,31 @@ def collectEdges(board, layerId, sourceArea=None):
         if isinstance(edge, pcbnew.PCB_TEXT):
             continue
         if not sourceArea or fitsIn(edge.GetBoundingBox(), sourceArea):
+            if typing.TYPE_CHECKING:
+                assert edge.__class__ == pcbnew.PCB_SHAPE
             edges.append(edge)
     return edges
 
 
-def collectItems(boardCollection, sourceArea):
+def collectItems(
+    boardCollection: collections.abc.Collection[pcbnew.BOARD_ITEM], sourceArea: BOX2I
+) -> List[pcbnew.BOARD_ITEM]:
     """Returns a list of board items fully contained in the source area"""
     return list([x for x in boardCollection if fitsIn(x.GetBoundingBox(), sourceArea)])
 
 
-def collectFootprints(boardCollection, sourceArea):
+def collectFootprints(
+    boardCollection: collections.abc.Collection[pcbnew.FOOTPRINT], sourceArea: BOX2I
+) -> List[pcbnew.FOOTPRINT]:
     """
     Returns a list of board footprints Which origin fits inside the source area.
     """
     return list([x for x in boardCollection if fitsIn(x.GetPosition(), sourceArea)])
 
 
-def collectZones(boardCollection, sourceArea):
+def collectZones(
+    boardCollection: collections.abc.Collection[pcbnew.ZONE], sourceArea: BOX2I
+) -> List[pcbnew.ZONE]:
     """
     Returns a list of board zones which centroid fits inside the source area.
     """
@@ -122,7 +152,7 @@ def collectZones(boardCollection, sourceArea):
             zone.Outline().Outline(i) for i in range(zone.Outline().OutlineCount())
         ]:
             p = shapely.geometry.Polygon(
-                [outline.CPoint(i) for i in range(outline.PointCount())]
+                [iter(outline.CPoint(i)) for i in range(outline.PointCount())]
             )
             items.append(p)
         polygon = shapely.ops.unary_union(items)
@@ -131,7 +161,7 @@ def collectZones(boardCollection, sourceArea):
     return list([x for x in boardCollection if fitsIn(zoneCentroid(x), sourceArea)])
 
 
-def getBBoxWithoutContours(edge):
+def getBBoxWithoutContours(edge: pcbnew.PCB_SHAPE) -> BOX2I:
     width = edge.GetWidth()
     edge.SetWidth(0)
     bBox = edge.GetBoundingBox()
@@ -139,18 +169,24 @@ def getBBoxWithoutContours(edge):
     return bBox
 
 
-def listGeometries(shapelyObject):
+def listGeometries(
+    shapelyObject: shapely.geometry.base.BaseGeometry,
+) -> collections.abc.Iterable[shapely.geometry.base.BaseGeometry]:
     """
     Given a shapely object, return an iterable of all geometries. I.e., for
     single items, return an iterable containing only the original item. For
     collections, return iterable of all the geometries in it.
     """
     if hasattr(shapelyObject, "geoms"):
+        if typing.TYPE_CHECKING:
+            assert isinstance(
+                shapelyObject, shapely.geometry.base.BaseMultipartGeometry
+            )
         return shapelyObject.geoms
     return [shapelyObject]
 
 
-def findBoundingBox(edges):
+def findBoundingBox(edges: collections.abc.Sequence[pcbnew.PCB_SHAPE]) -> BOX2I:
     """
     Return a bounding box of all drawings in edges
     """
@@ -162,7 +198,9 @@ def findBoundingBox(edges):
     return boundingBox
 
 
-def findBoardBoundingBox(board, sourceArea=None):
+def findBoardBoundingBox(
+    board: pcbnew.BOARD, sourceArea: Optional[BOX2I] = None
+) -> BOX2I:
     """
     Returns a bounding box (BOX2I) of all Edge.Cuts items either in
     specified source area (BOX2I) or in the whole board
@@ -171,7 +209,7 @@ def findBoardBoundingBox(board, sourceArea=None):
     return findBoundingBox(edges)
 
 
-def rectCenter(rect):
+def rectCenter(rect: BOX2I) -> KiPoint:
     """
     Given a BOX2I return its center
     """
@@ -180,7 +218,7 @@ def rectCenter(rect):
     )
 
 
-def rectByCenter(center, width, height):
+def rectByCenter(center: VECTOR2I, width: int, height: int) -> BOX2I:
     """
     Given a center point and size, return BOX2I
     """
@@ -190,20 +228,27 @@ def rectByCenter(center, width, height):
     )
 
 
-def normalize(vector):
+def normalize(
+    vector: Union[VECTOR2I, Tuple[int, int], List[int], _NPVector],
+) -> _NPVector:
     """Return a vector with unit length"""
+    if typing.TYPE_CHECKING:
+        if isinstance(vector, VECTOR2I):
+            vector = (vector[0], vector[1])
     vec = np.array([vector[0], vector[1]])
     return vec / np.linalg.norm(vector)
 
 
-def makePerpendicular(vector):
+def makePerpendicular(vector: _NPVector) -> _NPVector:
     """
     Given a 2D vector, return a vector which is perpendicular to the input one
     """
     return np.array([vector[1], -vector[0]])
 
 
-def linestringToSegments(linestring):
+def linestringToSegments(
+    linestring: shapely.LineString,
+) -> List[Tuple[_ShpPoint, _ShpPoint]]:
     """
     Given a Shapely linestring, return a list of tuples with start and endpoint
     of the segment
@@ -211,27 +256,29 @@ def linestringToSegments(linestring):
     return [x for x in zip(linestring.coords, islice(linestring.coords, 1, None))]
 
 
-def tl(rect):
+def tl(rect: BOX2I) -> KiPoint:
     """Return top left corner of rect"""
     return toKiCADPoint((rect.GetX(), rect.GetY()))
 
 
-def tr(rect):
+def tr(rect: BOX2I) -> KiPoint:
     """Return top right corner of rect"""
     return toKiCADPoint((rect.GetX() + rect.GetWidth(), rect.GetY()))
 
 
-def br(rect):
+def br(rect: BOX2I) -> KiPoint:
     """Return bottom right corner of rect"""
     return toKiCADPoint((rect.GetX() + rect.GetWidth(), rect.GetY() + rect.GetHeight()))
 
 
-def bl(rect):
+def bl(rect: BOX2I) -> KiPoint:
     """Return bottom left corner of rect"""
     return toKiCADPoint((rect.GetX(), rect.GetY() + rect.GetHeight()))
 
 
-def removeComponents(board, references):
+def removeComponents(
+    board: pcbnew.BOARD, references: collections.abc.Collection[str]
+) -> None:
     """
     Remove components with references from the board. References is a list of
     strings
@@ -241,35 +288,35 @@ def removeComponents(board, references):
             board.Remove(footprint)
 
 
-def parseReferences(dStr):
+def parseReferences(dStr: str) -> List[str]:
     """
     Parse comma separated list of component references to a list
     """
     return [x.strip() for x in dStr.split(",") if len(x.strip()) > 0]
 
 
-def shpBBoxLeft(bbox):
+def shpBBoxLeft(bbox: Box) -> AxialLine:
     """
     Given a shapely bounding box, return left edge as (pos, interval)
     """
     return AxialLine(bbox[0], bbox[1], bbox[3])
 
 
-def shpBBoxRight(bbox):
+def shpBBoxRight(bbox: Box) -> AxialLine:
     """
     Given a shapely bounding box, return right edge as (pos, interval)
     """
     return AxialLine(bbox[2], bbox[1], bbox[3])
 
 
-def shpBBoxTop(bbox):
+def shpBBoxTop(bbox: Box) -> AxialLine:
     """
     Given a shapely bounding box, return top edge as (pos, interval)
     """
     return AxialLine(bbox[1], bbox[0], bbox[2])
 
 
-def shpBBoxBottom(bbox):
+def shpBBoxBottom(bbox: Box) -> AxialLine:
     """
     Given a shapely bounding box, return bottom edge as (pos, interval)
     """
@@ -299,24 +346,27 @@ def shpBBoxExpand(box: Box, x: float, y: Optional[float] = None) -> Box:
     return (box[0] - x, box[1] - y, box[2] + x, box[3] + y)
 
 
-def shpBoxToRect(box):
-    box = list([int(x) for x in box])
+def shpBoxToRect(box: Box) -> BOX2I:
+    ibox = list([int(x) for x in box])
     return BOX2I(
-        toKiCADPoint((box[0], box[1])),
-        toKiCADPoint((box[2] - box[0], box[3] - box[1])),
+        toKiCADPoint((ibox[0], ibox[1])),
+        toKiCADPoint((ibox[2] - ibox[0], ibox[3] - ibox[1])),
     )
 
 
-def isLinestringCyclic(line):
+def isLinestringCyclic(line: shapely.LineString) -> bool:
     c = line.coords
     return c[0] == c[-1] or isinstance(line, LinearRing)
 
 
 def constructArrow(
-    origin, direction, distance: float, tipSize: float
+    _origin: pcbnew.VECTOR2I,
+    _direction: Tuple[np.float64, np.float64],
+    distance: float,
+    tipSize: float,
 ) -> shapely.LineString:
-    origin = np.array(origin)
-    direction = np.array(direction)
+    origin = np.array(_origin)
+    direction = np.array(_direction)
 
     endpoint = origin + direction * distance
 
@@ -331,47 +381,49 @@ def constructArrow(
     return arrow
 
 
-def fromOpt(object, default):
+def fromOpt(object: Optional[_T], default: _T) -> _T:
     """
     Given an object, return it if not None. Otherwise return default
     """
     return object if object is not None else default
 
 
-def isBottomLayer(layer):
+def isBottomLayer(layer: Layer) -> bool:
     """
     Decide if layer is a bottom layer
     """
     return layer.name.startswith("B_")
 
 
-def commonPoints(lines):
+def commonPoints(lines: List[shapely.LineString]) -> typing.Dict[_ShpPoint, int]:
     """
     Given a list of lines, return dictionary - vertice -> count. Where count
     specifies how many lines share the vertex.
     """
-    count = {}
+    count: typing.Dict[_ShpPoint, int] = {}
     for l in lines:
         for c in l.coords:
             count[c] = count.get(c, 0) + 1
     return count
 
 
-def isHorizontal(start, end):
+def isHorizontal(start: Tuple[float, float], end: Tuple[float, float]) -> bool:
     """
     Given a line decide if it is horizontal
     """
     return start[1] == end[1]
 
 
-def isVertical(start, end):
+def isVertical(start: Tuple[float, float], end: Tuple[float, float]) -> bool:
     """
     Given a line decide if it is vertical
     """
     return start[0] == end[0]
 
 
-def resolveAnchor(anchor):
+def resolveAnchor(
+    anchor: typing.Literal["tl", "tr", "bl", "br", "mt", "mb", "ml", "mr", "c"],
+) -> Callable[[BOX2I], VECTOR2I]:
     """
     Given a string anchor name, return a function that transforms BOX2I into
     a VECTOR2I
@@ -414,7 +466,7 @@ def splitOnReverse(input: str, predicate: Callable[[str], bool]) -> Tuple[str, s
     return head[::-1], tail[::-1]
 
 
-def indexOf(list, predicate):
+def indexOf(list: collections.abc.Iterable[_T], predicate: Callable[[_T], bool]) -> int:
     """
     Return the index of the first element that satisfies predicate. If no
     element is found, return -1
@@ -425,7 +477,7 @@ def indexOf(list, predicate):
     return -1
 
 
-def splitStr(delimiter, escapeChar, s):
+def splitStr(delimiter: str, escapeChar: str, s: str) -> List[str]:
     """
     Splits s based on delimiter that can be escaped via escapeChar
     """
@@ -434,9 +486,11 @@ def splitStr(delimiter, escapeChar, s):
     # Unpack first line
     for x in reader:
         return x
+    if typing.TYPE_CHECKING:
+        assert False
 
 
-def readParameterList(inputStr):
+def readParameterList(inputStr: str) -> typing.Dict[str, str]:
     """
     Given a string, read semicolon separated parameter list in the form of
     `key: value; key: value`. You can escape via `\\`
@@ -444,7 +498,7 @@ def readParameterList(inputStr):
     if len(inputStr.strip()) == 0:
         return {}
     try:
-        values = {}
+        values: typing.Dict[str, str] = {}
         for i, pair in enumerate(splitStr(";", "\\", inputStr)):
             if len(pair.strip()) == 0:
                 continue
@@ -459,7 +513,7 @@ def readParameterList(inputStr):
         raise RuntimeError(f"'{pair}' is not a valid key: value pair")
 
 
-def fakeKiCADGui():
+def fakeKiCADGui() -> None:
     """
     KiCAD assumes wxApp and locale exists. If we invoke a command, fake the
     existence of an app. You should store the application in a top-level
@@ -494,7 +548,19 @@ def fakeKiCADGui():
     return None
 
 
-def execute_with_debug(procedure, kwargs):
+# I couldn't figure out how to do this where the args of `procedure`
+# are typed.
+
+
+class _ExecKWArgs(typing.TypedDict):
+    debug: bool
+
+
+_T_kwargs = typing.TypeVar("_T_kwargs", bound=_ExecKWArgs)
+_T_ret = typing.TypeVar("_T_ret")
+
+
+def execute_with_debug(procedure: Callable[..., _T_ret], kwargs: _T_kwargs) -> _T_ret:
     debug = kwargs["debug"]
     del kwargs["debug"]
 
