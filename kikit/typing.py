@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Protocol, Tuple, TypeVar
+from typing import Any, Protocol, Tuple, TypeVar
 
 Box = Tuple[float, float, float, float]
 
