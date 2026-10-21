@@ -57,6 +57,10 @@ jobs:
         # The latest `black` that runs on Python<3.10 is Black 25, and
         # the current Black 26 has some differences with it.
         if: ${{ matrix.python-version != '3.8' && matrix.python-version != '3.9' }}
+      - run: make mypy
+        # Our type hints make use of the io.Reader and io.Writer
+        # protocols, which were added in Python 3.14.
+        if: ${{ matrix.python-version == '3.14' }}
       - run: make package
   build-pcm:
     name: Build PCM packages

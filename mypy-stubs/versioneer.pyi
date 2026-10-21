@@ -1,0 +1,6 @@
+import distutils.cmd
+
+def get_version() -> str: ...
+def get_cmdclass(
+    cmdclass: dict[str, type[distutils.cmd.Command]] | None = None,
+) -> dict[str, type[distutils.cmd.Command]]: ...

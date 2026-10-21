@@ -41,6 +41,8 @@ setuptools.setup(
             "wheel",
             "black",
             "isort",
+            "mypy",
+            "types-setuptools",
         ],
     },
     zip_safe=False,
