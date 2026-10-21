@@ -1,5 +1,6 @@
 import math
 import re
+import typing
 from copy import deepcopy
 
 import pcbnew
@@ -22,13 +23,17 @@ rad = pcbnew.EDA_ANGLE(1, pcbnew.RADIANS_T)
 
 UNIT_SPLIT = re.compile(r"\s*(-?\s*\d+(\.\d*)?)\s*(\w+|\%)$")
 
+_str = str
+
 
 class BaseValue(int):
     """
     Value in base units that remembers its original string representation.
     """
 
-    def __deepcopy__(self, memo):
+    str: _str
+
+    def __deepcopy__(self, memo: typing.Dict[int, "typing.Self"]) -> "typing.Self":
         cls = self.__class__
         value = self
         strRepr = self.str
@@ -38,15 +43,15 @@ class BaseValue(int):
             setattr(result, k, deepcopy(v, memo))
         return result
 
-    def __new__(cls, value, strRepr):
+    def __new__(cls, value: typing.Union[int, float], strRepr: _str) -> "typing.Self":
         x = super().__new__(cls, value)
         x.str = strRepr
         return x
 
-    def __str__(self):
+    def __str__(self) -> _str:
         return self.str
 
-    def __repr__(self):
+    def __repr__(self) -> _str:
         return f"<BaseValue: {int(self)}, {self.str} >"
 
 
@@ -59,10 +64,10 @@ class BaseAngle(pcbnew.EDA_ANGLE):
         super().__init__(value.AsDegrees(), pcbnew.DEGREES_T)
         self.str = strRepr
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.str
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<BaseAngle: {int(self.AsDegrees())}, {self.str} >"
 
 
@@ -73,19 +78,28 @@ class PercentageValue(float):
     Value is stored as floating point number where 1 corresponds to 100 %.
     """
 
-    def __new__(cls, value, strRepr):
+    str: _str
+
+    def __new__(cls, value: float, strRepr: _str) -> "typing.Self":
         x = super().__new__(cls, value)
         x.str = strRepr
         return x
 
-    def __str__(self):
+    def __str__(self) -> _str:
         return self.str
 
-    def __repr__(self):
+    def __repr__(self) -> _str:
         return f"<BaseValue: {int(self)}, {self.str} >"
 
 
-def readUnit(unitDir, unitStr):
+class _SupportsRMul(typing.Protocol):
+    def __rmul__(self, value: float, /) -> "typing.Self": ...
+
+
+_T_unit = typing.TypeVar("_T_unit", bound=_SupportsRMul)
+
+
+def readUnit(unitDir: typing.Dict[str, _T_unit], unitStr: str) -> _T_unit:
     match = UNIT_SPLIT.match(unitStr)
     if not match:
         raise UnitError(f"Cannot read quantity '{unitStr}'")
@@ -96,8 +110,8 @@ def readUnit(unitDir, unitStr):
         raise UnitError(f"Unknown unit in '{unitStr}'")
 
 
-def readLength(unitStr):
-    unitDir = {
+def readLength(unitStr: typing.Union[str, int]) -> BaseValue:
+    unitDir: typing.Dict[str, float] = {
         "mm": mm,
         "cm": cm,
         "dm": dm,
@@ -113,7 +127,7 @@ def readLength(unitStr):
     return BaseValue(readUnit(unitDir, unitStr), unitStr)
 
 
-def readAngle(unitStr: str) -> BaseAngle:
+def readAngle(unitStr: typing.Union[str, int]) -> BaseAngle:
     unitDir = {"deg": deg, "°": deg, "rad": rad}
     if isinstance(unitStr, int):
         return BaseAngle(
@@ -125,6 +139,6 @@ def readAngle(unitStr: str) -> BaseAngle:
     return BaseAngle(readUnit(unitDir, unitStr), unitStr)
 
 
-def readPercents(unitStr):
+def readPercents(unitStr: str) -> PercentageValue:
     unitDir = {"%": 0.01}
     return PercentageValue(readUnit(unitDir, unitStr), unitStr)
