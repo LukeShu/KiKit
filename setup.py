@@ -42,6 +42,7 @@ setuptools.setup(
             "black",
             "isort",
             "mypy",
+            "matplotlib",
             "types-setuptools",
         ],
     },
