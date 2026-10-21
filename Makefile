@@ -139,6 +139,7 @@ mypy_py_sources = setup.py
 mypy_py_sources += kikit/__init__.py
 mypy_py_sources += kikit/typing.py
 mypy_py_sources += kikit/intervals.py
+mypy_py_sources += kikit/units.py
 
 mypy:
 	$(mypy_env) mypy $(mypy_flags) $(mypy_py_sources) $(pyi_sources)
