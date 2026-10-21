@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import os
 import sys
 import traceback
@@ -432,13 +434,22 @@ def indexOf(list, predicate):
     return -1
 
 
+def splitStr(delimiter, escapeChar, s):
+    """
+    Splits s based on delimiter that can be escaped via escapeChar
+    """
+    # Let's use csv reader to implement this
+    reader = csv.reader(io.StringIO(s), delimiter=delimiter, escapechar=escapeChar)
+    # Unpack first line
+    for x in reader:
+        return x
+
+
 def readParameterList(inputStr):
     """
     Given a string, read semicolon separated parameter list in the form of
     `key: value; key: value`. You can escape via `\\`
     """
-    from kikit.panelize_ui import splitStr
-
     if len(inputStr.strip()) == 0:
         return {}
     try:
