@@ -307,15 +307,6 @@ def shpBoxToRect(box):
     )
 
 
-def rectToShpBox(rect):
-    return shapely.geometry.box(
-        rect.GetX(),
-        rect.GetY(),
-        rect.GetX() + rect.GetWidth(),
-        rect.GetY() + rect.GetHeight(),
-    )
-
-
 def isLinestringCyclic(line):
     c = line.coords
     return c[0] == c[-1] or isinstance(line, LinearRing)
