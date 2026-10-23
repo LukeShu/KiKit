@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import typing
 from typing import Dict, List, Set, Union
 
 import numpy as np
 import pcbnew
 
+import kikit.common
 from kikit import units
 from kikit.common import fromMm, readParameterList
 
 KString = Union[str, pcbnew.UTF8]
 
 
-def readKiKitProps(footprint):
+def readKiKitProps(footprint: pcbnew.FOOTPRINT) -> Dict[str, str]:
     """
     Given a footprint, returns a string containing KiKit annotations.
     Annotations are in fields starting with prefix `KIKIT:`.
@@ -32,7 +34,15 @@ class KiKitAnnotation:
 
 
 class TabAnnotation(KiKitAnnotation):
-    def __init__(self, ref, origin, direction, width, maxLength=fromMm(100), props={}):
+    def __init__(
+        self,
+        ref: str,
+        origin: pcbnew.VECTOR2I,
+        direction: typing.Tuple[np.float64, np.float64],
+        width: kikit.common.KiLength,
+        maxLength: kikit.common.KiLength = fromMm(100),
+        props: Dict[str, str] = {},
+    ) -> None:
         self.ref = ref
         self.origin = origin
         self.direction = direction
@@ -41,7 +51,7 @@ class TabAnnotation(KiKitAnnotation):
         self.props = props
 
     @staticmethod
-    def fromFootprint(footprint):
+    def fromFootprint(footprint: pcbnew.FOOTPRINT) -> TabAnnotation:
         origin = footprint.GetPosition()
         radOrientation = footprint.GetOrientation().AsRadians()
         direction = (np.cos(radOrientation), -np.sin(radOrientation))

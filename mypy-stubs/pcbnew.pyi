@@ -25,7 +25,8 @@ class EDA_ITEM:  # line 1386
     def GetBoundingBox(self) -> BOX2I: ...  # line 1564
     def GetPosition(self) -> VECTOR2I: ...  # line 1568
 
-class EDA_TEXT: ...  # line 2532
+class EDA_TEXT:  # line 2532
+    def GetText(self) -> str: ...  # line 2560
 
 @typing.type_check_only
 class _PCB_LAYER_ID(int): ...
@@ -168,6 +169,12 @@ class SHAPE_POLY_SET(SHAPE):  # line 6774
     def OutlineCount(self) -> int: ...  # line 6888
     def Outline(self, aIntex: int, /) -> SHAPE_LINE_CHAIN: ...  # line 6904
 
+class UTF8: ...  # line 7652
+
+class LIB_ID:  # line 7778
+    def GetLibNickname(self) -> UTF8: ...  # line 7795
+    def GetLibItemName(self) -> UTF8: ...  # line 7807
+
 class BOARD_ITEM(EDA_ITEM):  # line 10252
     def GetLayer(self) -> _PCB_LAYER_ID: ...  # line 10378
 
@@ -233,6 +240,7 @@ class EDA_SHAPE:  # line 17585
 
 class PCB_SHAPE(BOARD_CONNECTED_ITEM, EDA_SHAPE): ...  # line 18000
 class PCB_TEXT(BOARD_ITEM, EDA_TEXT): ...  # line 18108
+class PCB_FIELD(PCB_TEXT): ...  # line 18423
 class PCB_DIMENSION_BASE(PCB_TEXT): ...  # line 18690
 
 class BOARD(BOARD_ITEM_CONTAINER):  # line 21424
@@ -241,6 +249,8 @@ class BOARD(BOARD_ITEM_CONTAINER):  # line 21424
 
 class FOOTPRINT(BOARD_ITEM_CONTAINER):  # line 22599
     def GraphicalItems(self) -> DRAWINGS: ...  # line 22681
+    def GetOrientation(self) -> EDA_ANGLE: ...  # line 22724
+    def GetFPID(self) -> LIB_ID: ...  # line 22740
     def GetReference(self) -> str: ...  # line 23066
     def GetBoundingBox(
         self, aIncludeText: bool = ..., includeHiddenText: bool = ..., /
