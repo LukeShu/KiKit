@@ -146,6 +146,12 @@ mypy_py_sources += test/units/__init__.py
 mypy_py_sources += test/units/test_intervals.py
 mypy_py_sources += test/units/test_units.py
 
+mypy_py_sources += kikit/doc.py
+mypy_py_sources += scripts/exampleDoc.py
+mypy_py_sources += scripts/exampleScripting.py
+mypy_py_sources += scripts/panelizeDoc.py
+mypy_py_sources += scripts/setJson.py
+
 mypy:
 	$(mypy_env) mypy $(mypy_flags) $(mypy_py_sources) $(pyi_sources)
 .PHONY: mypy

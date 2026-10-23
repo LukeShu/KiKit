@@ -13,7 +13,7 @@ from kikit.doc import runBoardExample, runExampleJoin
 counter = 0
 
 
-def autoName():
+def autoName() -> str:
     global counter
     counter += 1
     return f"examplePanel{counter}"
