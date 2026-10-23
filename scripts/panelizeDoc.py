@@ -5,6 +5,7 @@ Generate documentation in markdown format for panelization
 """
 
 import inspect
+import typing
 
 import pcbnew
 
@@ -12,12 +13,12 @@ from kikit import panelize, substrate
 from kikit.doc import header, printHeader, printHelp
 
 
-def synopsis(object):
-    printHeader(object)
-    printHelp(object)
+def synopsis(obj: typing.Callable[..., typing.Any]) -> None:
+    printHeader(obj)
+    printHelp(obj)
 
 
-def classMethods(c):
+def classMethods(c: object) -> None:
     for name, o in inspect.getmembers(c, predicate=inspect.isfunction):
         if name.startswith("_"):
             continue

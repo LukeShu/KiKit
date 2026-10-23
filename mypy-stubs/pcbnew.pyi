@@ -6,6 +6,9 @@ class SwigPyIterator:  # line 58
     next: typing.Callable[[SwigPyIterator], typing.Any]  # missing in 10.0.7
     def __next__(self) -> typing.Any: ...  # line 92
 
+class VECTOR2I: ...  # line 4986
+class BOX2I: ...  # line 5363
+
 @typing.type_check_only
 class _EDA_ANGLE_T: ...
 
