@@ -141,10 +141,12 @@ mypy_py_sources += kikit/typing.py
 mypy_py_sources += kikit/intervals.py
 mypy_py_sources += kikit/units.py
 mypy_py_sources += kikit/defs.py
+mypy_py_sources += kikit/sexpr.py
 
 mypy_py_sources += test/units/__init__.py
 mypy_py_sources += test/units/test_intervals.py
 mypy_py_sources += test/units/test_units.py
+mypy_py_sources += test/units/test_sexpr.py
 
 mypy_py_sources += kikit/doc.py
 mypy_py_sources += scripts/exampleDoc.py
