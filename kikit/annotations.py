@@ -5,7 +5,7 @@ from typing import Dict, List, Set, Union
 import numpy as np
 import pcbnew
 
-from kikit import units  # type: ignore
+from kikit import units
 from kikit.common import fromMm, readParameterList
 
 KString = Union[str, pcbnew.UTF8]
