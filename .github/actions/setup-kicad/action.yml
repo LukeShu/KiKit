@@ -14,7 +14,8 @@ runs:
       run: |
         set -x
         pydir=$(python -c 'import sysconfig; print(sysconfig.get_path("platlib"))')
-        pyhash=$(find "$pydir" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+        # On Python 3.8 and 3.9, .pyc files are not stable.
+        pyhash=$(find "$pydir" -type f -not -name '*.pyc' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
         setuphash=$(sha256sum .github/actions/setup-kicad/setup.sh | cut -d' ' -f1)
         os='${{ runner.os }}'
         set +x
