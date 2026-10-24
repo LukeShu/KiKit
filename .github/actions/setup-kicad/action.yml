@@ -18,6 +18,8 @@ runs:
         setuphash=$(sha256sum .github/actions/setup-kicad/setup.sh | cut -d' ' -f1)
         os='${{ runner.os }}'
         set +x
+        find "$pydir" -type f -print0 | sort -z | xargs -0 sha256sum
+        find "$pydir" -not -type d -not -type f
         echo "pydir=${pydir}" >> "$GITHUB_OUTPUT"
         echo "key=${os}-${pydir}-${pyhash}-${setuphash}" >> "$GITHUB_OUTPUT"
     - uses: actions/cache/restore@v6
