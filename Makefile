@@ -26,7 +26,7 @@ docs/panelization/examples.md: scripts/exampleDoc.py docs/resources/conn.png
 
 package:
 	rm -f dist/*
-	python3 setup.py sdist bdist_wheel
+	python3 -m build
 
 install: package
 	pip3 install --no-deps --force dist/*.whl
@@ -92,3 +92,28 @@ docker-release:
 
 clean:
 	rm -rf dist build
+
+# Manually link in system pcbnew+wx, instead of using
+# `--system-site-packages`, to have maximum isolation from the host
+# Python.  Notably, system `mypy` won't find packages in the venv.
+_empty :=
+_space := $(_empty) $(_empty)
+_STD_PATH := $(subst $(_space),:,$(filter-out $(CURDIR)/venv/bin,$(subst :,$(_space),$(PATH))))
+stdpython3 = PATH=$(_STD_PATH); unset VIRTUAL_ENV; python3
+venv: pyproject.toml setup.py
+	python3 -m venv $@
+	ln -sf "$$($(stdpython3) -c 'import _pcbnew; print(_pcbnew.__file__)')"     $@/lib/python*/site-packages/
+	ln -sf "$$($(stdpython3) -c 'import pcbnew; print(pcbnew.__file__)')"       $@/lib/python*/site-packages/
+	ln -sf "$$($(stdpython3) -c 'import wx; print(wx.__path__[0])')"{,Python-*} $@/lib/python*/site-packages/
+	$@/bin/pip install setuptools
+	$@/bin/pip install -e '.[dev]'
+# SolidPython==1.1.3 is broken with setuptools>=82.  The fix is in Git
+# master, but at this time 1.1.4 hasn't been released yet.  If this is
+# the case, upgrade to a Git version.  Distros shipping both
+# setuptools>=82 and SolidPython (eg: Arch Linux) either do this, or
+# backport the fix to 1.1.3.
+	if $@/bin/python -c 'import sys;exec("try:\n\timport solid\nexcept ModuleNotFoundError as e:\n\tif e.name == \"pkg_resources\":\n\t\tsys.exit(0)");sys.exit(1)'; then \
+		$@/bin/pip install 'solidpython @ git+https://github.com/SolidCode/SolidPython@dcee03e9350a2309ee2fc191b46acf4a00199aff'; \
+	fi
+	$@/bin/pip install pcbdraw
+	touch --no-create $@
