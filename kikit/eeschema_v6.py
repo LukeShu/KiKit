@@ -1,12 +1,15 @@
-from dataclasses import dataclass, field
-from kikit.sexpr import Atom, parseSexprF
-from itertools import islice
 import os
-from typing import Optional
 from copy import deepcopy
+from dataclasses import dataclass, field
+from itertools import islice
+from typing import Optional
+
+from kikit.sexpr import Atom, parseSexprF
+
 
 class SchematicError(RuntimeError):
     pass
+
 
 @dataclass
 class Symbol:
@@ -19,6 +22,7 @@ class Symbol:
     dnp: bool = False
     properties: dict = field(default_factory=dict)
 
+
 @dataclass
 class SymbolInstance:
     symbol_path: Optional[str] = None
@@ -28,13 +32,19 @@ class SymbolInstance:
     value: Optional[str] = None
     footprint: Optional[str] = None
 
+
 def getProperty(sexpr, field):
     for x in islice(sexpr, 1, None):
-        if len(x) > 0 and \
-            isinstance(x[0], Atom) and x[0].value == "property" and \
-            isinstance(x[1], Atom) and x[1].value == field:
+        if (
+            len(x) > 0
+            and isinstance(x[0], Atom)
+            and x[0].value == "property"
+            and isinstance(x[1], Atom)
+            and x[1].value == field
+        ):
             return x[2].value
     return None
+
 
 def isSymbol(sexpr):
     if isinstance(sexpr, Atom) or len(sexpr) == 0:
@@ -42,11 +52,13 @@ def isSymbol(sexpr):
     item = sexpr[0]
     return isinstance(item, Atom) and item.value == "symbol"
 
+
 def isSymbolInstances(sexpr):
     if isinstance(sexpr, Atom) or len(sexpr) == 0:
         return False
     item = sexpr[0]
     return isinstance(item, Atom) and item.value == "symbol_instances"
+
 
 def isSheet(sexpr):
     if isinstance(sexpr, Atom) or len(sexpr) == 0:
@@ -54,11 +66,13 @@ def isSheet(sexpr):
     item = sexpr[0]
     return isinstance(item, Atom) and item.value == "sheet"
 
+
 def isUuid(sexpr):
     if isinstance(sexpr, Atom) or len(sexpr) == 0:
         return False
     item = sexpr[0]
     return isinstance(item, Atom) and item.value == "uuid"
+
 
 def isPath(sexpr):
     if isinstance(sexpr, Atom) or len(sexpr) == 0:
@@ -66,11 +80,13 @@ def isPath(sexpr):
     item = sexpr[0]
     return isinstance(item, Atom) and item.value == "path"
 
+
 def getUuid(sexpr):
     for x in islice(sexpr, 1, None):
         if x and x[0] == "uuid":
             return x[1].value
     return None
+
 
 def getElement(sexpr, name):
     for x in islice(sexpr, 1, None):
@@ -81,6 +97,7 @@ def getElement(sexpr, name):
             return x
     return None
 
+
 def getAttributeKey(sexpr):
     if not sexpr:
         return None
@@ -88,6 +105,7 @@ def getAttributeKey(sexpr):
     if not isinstance(key, Atom):
         return None
     return key.value
+
 
 def extractSymbol(sexpr, path):
     s = Symbol()
@@ -111,6 +129,7 @@ def extractSymbol(sexpr, path):
         elif key == "property":
             s.properties[x[1].value] = x[2].value
     return s
+
 
 def extractSymbolInstance(sexpr, sheetPath):
     i = SymbolInstance()
@@ -139,14 +158,21 @@ def extractSymbolInstance(sexpr, sheetPath):
         if key == "uuid":
             i.symbol_path = sheetPath + "/" + x[1].value
         elif key == "instances":
-            projects = [proj for proj in islice(x, 1, None)
-                if getAttributeKey(proj) == "project"]
+            projects = [
+                proj
+                for proj in islice(x, 1, None)
+                if getAttributeKey(proj) == "project"
+            ]
             for proj in projects:
-                paths = [path for path in islice(proj, 1, None)
-                    if isPath(path) and sheetPath == path.items[1].value]
+                paths = [
+                    path
+                    for path in islice(proj, 1, None)
+                    if isPath(path) and sheetPath == path.items[1].value
+                ]
                 for path in paths:
                     collectInstanceProperties(path)
     return i if seen else None
+
 
 def extractSymbolInstanceV6(sexpr, path):
     s = SymbolInstance()
@@ -165,7 +191,8 @@ def extractSymbolInstanceV6(sexpr, path):
             s.footprint = x[1].value
     return s
 
-def collectSymbols(filename, path = None):
+
+def collectSymbols(filename, path=None):
     """
     Crawl given sheet and return two lists - one with symbols, one with
     symbol instances
@@ -210,11 +237,14 @@ def collectSymbols(filename, path = None):
 def getField(component, field):
     return component.properties.get(field, None)
 
+
 def getUnit(component):
     return component.unit
 
+
 def getReference(component):
     return component.properties["Reference"]
+
 
 def extractComponents(filename):
     symbols, instances = collectSymbols(filename)

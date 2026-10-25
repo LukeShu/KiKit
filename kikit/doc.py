@@ -1,16 +1,23 @@
 import inspect
-import tempfile
-import subprocess
-import shutil
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 from itertools import chain
 
+
 def header(func):
     signature = inspect.signature(func)
-    args = [str(k) if v.default is inspect.Parameter.empty else str(k) + "=" + str(v.default)
-        for k, v in signature.parameters.items()]
+    args = [
+        (
+            str(k)
+            if v.default is inspect.Parameter.empty
+            else str(k) + "=" + str(v.default)
+        )
+        for k, v in signature.parameters.items()
+    ]
     currentLine = func.__name__ + "("
     lines = []
     indent = " " * (len(func.__name__) + 1)
@@ -24,49 +31,68 @@ def header(func):
             currentLine = newLine
         separator = ", "
     lines.append(currentLine + ")")
-    return("\n".join(lines))
+    return "\n".join(lines)
+
 
 def printHeader(func):
     print(f"\n#### `{func.__name__}`")
     print(f"```\n{header(func)}\n```")
 
+
 def printHelp(x):
     print(inspect.getdoc(x))
+
 
 def quotePosix(args):
     """
     Given a list of command line arguments, quote them so they can be can be
     printed on POSIX
     """
+
     def q(x):
         if " " in x:
             return "'" + x + "'"
         else:
             return x
+
     return [q(x) for x in args]
+
 
 def quoteWindows(args):
     """
     Given a list of command line arguments, quote them so they can be can be
     printed in Windows CLI
     """
+
     def q(x):
         if " " in x:
             return '"' + x + '"'
         else:
             return x
+
     return [q(x) for x in args]
+
 
 def panelizeAndDraw(name, command):
     dirname = tempfile.mkdtemp()
     output = os.path.join(dirname, "x.kicad_pcb")
     try:
         outimage = f"docs/resources/{name}.png"
-        subprocess.run(command + [output, "--debug", "trace: true"], check=True, capture_output=True)
-        r = subprocess.run(["pcbdraw", "plot", "--vcuts", "Cmts.User", "--silent", output,
-                outimage], check=True, capture_output=True)
-        subprocess.run(["convert", outimage, "-define",
-            "png:include-chunk=none", outimage], check=True, capture_output=True)
+        subprocess.run(
+            command + [output, "--debug", "trace: true"],
+            check=True,
+            capture_output=True,
+        )
+        r = subprocess.run(
+            ["pcbdraw", "plot", "--vcuts", "Cmts.User", "--silent", output, outimage],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["convert", outimage, "-define", "png:include-chunk=none", outimage],
+            check=True,
+            capture_output=True,
+        )
     except subprocess.CalledProcessError as e:
         print("Command: " + " ".join(e.cmd), file=sys.stderr)
         print("Stdout: " + e.stdout.decode("utf8"), file=sys.stderr)
@@ -77,6 +103,7 @@ def panelizeAndDraw(name, command):
 
 
 runExampleThreads = []
+
 
 def runBoardExample(name, args):
     """
@@ -123,6 +150,7 @@ def runBoardExample(name, args):
     global runExampleThreads
     runExampleThreads.append(t)
 
+
 def runScriptingExample(name, args):
     """
     Run a Python panelization script that takes the name of the output as a last
@@ -148,4 +176,3 @@ def runScriptingExample(name, args):
 def runExampleJoin():
     for t in runExampleThreads:
         t.join()
-

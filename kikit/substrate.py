@@ -1,23 +1,30 @@
-from shapely import geometry
-from shapely.geometry import (Polygon, MultiPolygon, LineString,
-    MultiLineString, LinearRing, Point)
-from shapely.geometry.collection import GeometryCollection
-from shapely.ops import orient, unary_union, split, nearest_points
-import shapely
 import json
-import numpy as np
-from kikit.intervals import Interval, BoxNeighbors, BoxPartitionLines
-import pcbnew
 from enum import IntEnum
 from itertools import product
-
 from typing import Iterable, List, Tuple, Union
 
+import numpy as np
+import pcbnew
+import shapely
+from shapely import geometry
+from shapely.geometry import (
+    LinearRing,
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Point,
+    Polygon,
+)
+from shapely.geometry.collection import GeometryCollection
+from shapely.ops import nearest_points, orient, split, unary_union
+
 from kikit.common import *
-from kikit.units import deg
 from kikit.defs import STROKE_T, Layer
+from kikit.intervals import BoxNeighbors, BoxPartitionLines, Interval
+from kikit.units import deg
 
 TABFAIL_VISUAL = False
+
 
 class PositionError(RuntimeError):
     def __init__(self, message, point):
@@ -25,10 +32,12 @@ class PositionError(RuntimeError):
         self.point = point
         self.origMessage = message
 
+
 class NoIntersectionError(RuntimeError):
     def __init__(self, message, point):
         super().__init__(message)
         self.point = point
+
 
 class TabError(RuntimeError):
     def __init__(self, origin, direction, hints):
@@ -39,11 +48,14 @@ class TabError(RuntimeError):
             message += f"- {hint}\n"
         super().__init__(message)
 
+
 class TabFilletError(RuntimeError):
     pass
 
+
 def roundPoint(point, precision=-2):
     return (round(point[0], precision), round(point[1], precision))
+
 
 def getStartPoint(geom):
     if geom.GetShape() == STROKE_T.S_CIRCLE:
@@ -58,6 +70,7 @@ def getStartPoint(geom):
     else:
         point = geom.GetStart()
     return point
+
 
 def getEndPoint(geom):
     if geom.GetShape() == STROKE_T.S_CIRCLE:
@@ -78,14 +91,17 @@ def getEndPoint(geom):
         point = geom.GetStart() if geom.IsClosed() else geom.GetEnd()
     return point
 
+
 class CoincidenceList(list):
     def getNeighbor(self, myIdx):
         if self[0] == myIdx:
             return self[1]
         return self[0]
 
+
 def getUnused(usageList):
     return usageList.index(True)
+
 
 def findRing(startIdx, geometryList, coincidencePoints, unused):
     """
@@ -93,12 +109,14 @@ def findRing(startIdx, geometryList, coincidencePoints, unused):
     """
     unused[startIdx] = False
     ring = [startIdx]
-    if roundPoint(getStartPoint(geometryList[startIdx])) == roundPoint(getEndPoint(geometryList[startIdx])):
+    if roundPoint(getStartPoint(geometryList[startIdx])) == roundPoint(
+        getEndPoint(geometryList[startIdx])
+    ):
         return ring
     currentPoint = roundPoint(getEndPoint(geometryList[startIdx]))
     while True:
         nextIdx = coincidencePoints[currentPoint].getNeighbor(ring[-1])
-        assert(unused[nextIdx] or nextIdx == startIdx)
+        assert unused[nextIdx] or nextIdx == startIdx
         if currentPoint == roundPoint(getStartPoint(geometryList[nextIdx])):
             currentPoint = roundPoint(getEndPoint(geometryList[nextIdx]))
         else:
@@ -108,6 +126,7 @@ def findRing(startIdx, geometryList, coincidencePoints, unused):
             return ring
         ring.append(nextIdx)
 
+
 def isValidPcbShape(g):
     """
     Currently, we are aware of a single case of an invalid pcb_shape -- line
@@ -115,6 +134,7 @@ def isValidPcbShape(g):
     saving. Therefore, we have to check it.
     """
     return g.GetShape() != pcbnew.S_SEGMENT or g.GetLength() >= fromMm(0.001)
+
 
 def extractRings(geometryList):
     """
@@ -134,11 +154,13 @@ def extractRings(geometryList):
     for point, items in coincidencePoints.items():
         l = len(items)
         if l == 1:
-            raise PositionError("Discontinuous outline at [{}, {}]. This may have several causes:\n" +
-                                "    - The outline in really discontinuous. Check the coordinates in your source board.\n" +
-                                "    - You haven't included all the outlines or in the case of multi-design,\n" +
-                                "      you have included a part of outline from a neighboring board.",
-                                point)
+            raise PositionError(
+                "Discontinuous outline at [{}, {}]. This may have several causes:\n"
+                + "    - The outline in really discontinuous. Check the coordinates in your source board.\n"
+                + "    - You haven't included all the outlines or in the case of multi-design,\n"
+                + "      you have included a part of outline from a neighboring board.",
+                point,
+            )
         if l == 2:
             continue
         raise PositionError("Multiple outlines ({}) at [{{}}, {{}}]".format(l), point)
@@ -152,21 +174,25 @@ def extractRings(geometryList):
         rings.append(findRing(start, geometryList, coincidencePoints, unused))
     return rings
 
+
 def commonEndPoint(a, b):
     """
     Return common end/start point of two entities
     """
     aStart, aEnd = getStartPoint(a), getEndPoint(a)
     bStart, bEnd = getStartPoint(b), getEndPoint(b)
-    if roundPoint(aStart) == roundPoint(bStart) or roundPoint(aStart) == roundPoint(bEnd):
+    if roundPoint(aStart) == roundPoint(bStart) or roundPoint(aStart) == roundPoint(
+        bEnd
+    ):
         return aStart
     return aEnd
+
 
 def approximateArc(arc, endWith):
     """
     Take DRAWINGITEM and approximate it using lines
     """
-    SEGMENTS_PER_FULL= 4 * 32 # To Be consistent with default shapely settings
+    SEGMENTS_PER_FULL = 4 * 32  # To Be consistent with default shapely settings
 
     startAngle = EDA_ANGLE(0, pcbnew.DEGREES_T)
     endAngle = EDA_ANGLE(0, pcbnew.DEGREES_T)
@@ -175,7 +201,13 @@ def approximateArc(arc, endWith):
         endAngle = startAngle + 360 * deg
         segments = SEGMENTS_PER_FULL
     else:
-        segments = abs(int((endAngle.AsDegrees() - startAngle.AsDegrees()) * SEGMENTS_PER_FULL // 360))
+        segments = abs(
+            int(
+                (endAngle.AsDegrees() - startAngle.AsDegrees())
+                * SEGMENTS_PER_FULL
+                // 360
+            )
+        )
     # Ensure a minimal number of segments for small angle section of arcs
     segments = max(segments, 12)
     theta = np.linspace(startAngle.AsRadians(), endAngle.AsRadians(), segments)
@@ -186,9 +218,10 @@ def approximateArc(arc, endWith):
     end = np.array(endWith)
     first = np.array([outline[0][0], outline[0][1]])
     last = np.array([outline[-1][0], outline[-1][1]])
-    if (np.linalg.norm(end - first) < np.linalg.norm(end - last)):
+    if np.linalg.norm(end - first) < np.linalg.norm(end - last):
         outline.reverse()
     return outline
+
 
 def approximateBezier(bezier, endWith):
     """
@@ -204,11 +237,11 @@ def approximateBezier(bezier, endWith):
 
     start = np.array(bezier.GetStart())
     if hasattr(bezier, "GetBezierC1"):
-      bc1 = np.array(bezier.GetBezierC1())
-      bc2 = np.array(bezier.GetBezierC2())
+        bc1 = np.array(bezier.GetBezierC1())
+        bc2 = np.array(bezier.GetBezierC2())
     else:
-      bc1 = np.array(bezier.GetBezControl1())
-      bc2 = np.array(bezier.GetBezControl2())
+        bc1 = np.array(bezier.GetBezControl1())
+        bc2 = np.array(bezier.GetBezControl2())
     end = np.array(bezier.GetEnd())
 
     degenerated = (start == bc1).all() and (bc2 == end).all()
@@ -217,10 +250,12 @@ def approximateBezier(bezier, endWith):
     if not degenerated:
         for i in range(CURVE_POINTS):
             t = dt * i
-            vertex = (1 - t) ** 3 * start + \
-                     3 * t * (1 - t) ** 2 * bc1 + \
-                     3 * t ** 2 * (1 - t) * bc2 + \
-                     t ** 3 * end
+            vertex = (
+                (1 - t) ** 3 * start
+                + 3 * t * (1 - t) ** 2 * bc1
+                + 3 * t**2 * (1 - t) * bc2
+                + t**3 * end
+            )
             outline.append(vertex)
     else:
         outline += [start, end]
@@ -229,16 +264,19 @@ def approximateBezier(bezier, endWith):
     endWith = np.array(endWith)
     first = np.array([outline[0][0], outline[0][1]])
     last = np.array([outline[-1][0], outline[-1][1]])
-    if (np.linalg.norm(endWith - first) < np.linalg.norm(endWith - last)):
+    if np.linalg.norm(endWith - first) < np.linalg.norm(endWith - last):
         outline.reverse()
 
     return outline
 
+
 def shapeLinechainToList(l: pcbnew.SHAPE_LINE_CHAIN) -> List[Tuple[int, int]]:
     return [(p.x, p.y) for p in l.CPoints()]
 
-def shapePolyToShapely(p: pcbnew.SHAPE_POLY_SET) \
-        -> Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]:
+
+def shapePolyToShapely(
+    p: pcbnew.SHAPE_POLY_SET,
+) -> Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]:
     """
     Take SHAPE_POLY_SET and create a shapely polygon out of it.
     """
@@ -269,7 +307,8 @@ def rectToShapely(rect):
         return poly
     # Shrink-then-grow rounds the corners; unlike manual arc math this
     # works correctly even when the rect is rotated.
-    return poly.buffer(-radius, join_style='round').buffer(radius, join_style='round')
+    return poly.buffer(-radius, join_style="round").buffer(radius, join_style="round")
+
 
 def toShapely(ring, geometryList):
     """
@@ -281,11 +320,15 @@ def toShapely(ring, geometryList):
     for idxA, idxB in zip(ring, ring[1:] + ring[:1]):
         shape = geometryList[idxA].GetShape()
         if shape in [STROKE_T.S_ARC, STROKE_T.S_CIRCLE]:
-            outline += approximateArc(geometryList[idxA],
-                commonEndPoint(geometryList[idxA], geometryList[idxB]))
+            outline += approximateArc(
+                geometryList[idxA],
+                commonEndPoint(geometryList[idxA], geometryList[idxB]),
+            )
         elif shape in [STROKE_T.S_CURVE]:
-            outline += approximateBezier(geometryList[idxA],
-                commonEndPoint(geometryList[idxA], geometryList[idxB]))
+            outline += approximateBezier(
+                geometryList[idxA],
+                commonEndPoint(geometryList[idxA], geometryList[idxB]),
+            )
         elif shape in [STROKE_T.S_RECT]:
             assert idxA == idxB
             return rectToShapely(geometryList[idxA])
@@ -298,6 +341,7 @@ def toShapely(ring, geometryList):
         else:
             raise RuntimeError(f"Unsupported shape {shape} in outline")
     return Polygon(outline)
+
 
 def buildContainmentGraph(polygons):
     """
@@ -315,10 +359,12 @@ def buildContainmentGraph(polygons):
             relation[a].append(b)
     return relation
 
+
 class DFS(IntEnum):
     WHITE = 0
     GRAY = 2
     BLACK = 3
+
 
 def topologicalSort(graph):
     """
@@ -327,6 +373,7 @@ def topologicalSort(graph):
     """
     vertexState = dict.fromkeys(graph.keys(), DFS.WHITE)
     topologicalSort = []
+
     def dfs(vertex):
         vertexState[vertex] = DFS.GRAY
         for neighbor in graph[vertex]:
@@ -334,10 +381,12 @@ def topologicalSort(graph):
                 dfs(neighbor)
         vertexState[vertex] = DFS.BLACK
         topologicalSort.append(vertex)
+
     for vertex in graph.keys():
         if vertexState[vertex] == DFS.WHITE:
             dfs(vertex)
     return topologicalSort
+
 
 def graphLevels(graph):
     """
@@ -354,8 +403,10 @@ def graphLevels(graph):
             vertexLevel[neighbor] = max(vertexLevel[neighbor], level + 1)
     return vertexLevel
 
+
 def even(number):
     return number % 2 == 0
+
 
 def substratesFrom(polygons):
     """
@@ -363,18 +414,27 @@ def substratesFrom(polygons):
     outer and returns a list of polygons with holes (substrates)
     """
     containmentGraph = buildContainmentGraph(polygons)
-    polygonLevels = graphLevels(containmentGraph) # Even polygons are outlines, odd are holes
+    polygonLevels = graphLevels(
+        containmentGraph
+    )  # Even polygons are outlines, odd are holes
     substrates = []
     for idx, polygon in enumerate(polygons):
         level = polygonLevels[idx]
         if not even(level):
             continue
-        holes = [polygons[x].exterior for x in containmentGraph[idx] if polygonLevels[x] == level + 1]
+        holes = [
+            polygons[x].exterior
+            for x in containmentGraph[idx]
+            if polygonLevels[x] == level + 1
+        ]
         substrates.append(Polygon(polygon.exterior, holes))
     return substrates
 
+
 class CircleFitCandidates:
-    def __init__(self, tolerance: int = fromMm(0.005), radius_limit: int = fromMm(1000)):
+    def __init__(
+        self, tolerance: int = fromMm(0.005), radius_limit: int = fromMm(1000)
+    ):
         self.tolerance = tolerance
         self.radius_limit = radius_limit
 
@@ -410,23 +470,35 @@ class CircleFitCandidates:
             needsRevalidation = True
         else:
             c, r = self.foundCircle
-            needsRevalidation = np.linalg.norm(newCenter - c) > self.tolerance or np.abs(newRadius - r) > self.tolerance
+            needsRevalidation = (
+                np.linalg.norm(newCenter - c) > self.tolerance
+                or np.abs(newRadius - r) > self.tolerance
+            )
 
         if needsRevalidation:
             points = [np.array([x, y]) for x, y in zip(self._xs, self._ys)]
             toRevalidate = list(zip(points, points[1:]))
         else:
-            toRevalidate = [(np.array([self._xs[-2], self._ys[-2]]), np.array([self._xs[-1], self._ys[-1]]))]
+            toRevalidate = [
+                (
+                    np.array([self._xs[-2], self._ys[-2]]),
+                    np.array([self._xs[-1], self._ys[-1]]),
+                )
+            ]
 
-        if self._doLinesFitCircle(toRevalidate, newCenter, newRadius) and newRadius < self.radius_limit:
+        if (
+            self._doLinesFitCircle(toRevalidate, newCenter, newRadius)
+            and newRadius < self.radius_limit
+        ):
             self.foundCircle = newCenter, newRadius
             return True
 
         self._popLast()
         return False
 
-    def _doLinesFitCircle(self, lines: Iterable[Tuple[np.array, np.array]],
-                          c: np.array, r: float) -> bool:
+    def _doLinesFitCircle(
+        self, lines: Iterable[Tuple[np.array, np.array]], c: np.array, r: float
+    ) -> bool:
         for start, end in lines:
             # We don't use list of candidates in this as it is in the hot path
             # and constructing the list of candidates adds a significant
@@ -470,7 +542,7 @@ class CircleFitCandidates:
         self._ySum -= self._ys[-1]
         self._ys.pop()
 
-    def _fitCircle(self, maxIter = 10) -> Tuple[np.array, float]:
+    def _fitCircle(self, maxIter=10) -> Tuple[np.array, float]:
         """
         Implements Kenichi Kanatani, Prasanna Rangarajan, "Hyper least squares fitting of circles and ellipses"
         Computational Statistics & Data Analysis, Vol. 55, pages 2197-2208, (2011)
@@ -502,32 +574,35 @@ class CircleFitCandidates:
         Var_z = Mzz - Mz * Mz
 
         A2 = 4 * Cov_xy - 3 * Mz * Mz - Mzz
-        A1 = Var_z * Mz + 4. * Cov_xy * Mz - Mxz * Mxz - Myz * Myz
-        A0 = Mxz * (Mxz * Myy - Myz * Mxy) + Myz * (Myz * Mxx - Mxz * Mxy) - Var_z * Cov_xy
+        A1 = Var_z * Mz + 4.0 * Cov_xy * Mz - Mxz * Mxz - Myz * Myz
+        A0 = (
+            Mxz * (Mxz * Myy - Myz * Mxy)
+            + Myz * (Myz * Mxx - Mxz * Mxy)
+            - Var_z * Cov_xy
+        )
         A22 = A2 + A2
 
         # finding the root of the characteristic polynomial
         Y = A0
         X = 0.0
         for i in range(maxIter):
-            Dy = A1 + X * (A22 + 16. * (X ** 2))
+            Dy = A1 + X * (A22 + 16.0 * (X**2))
             xnew = X - Y / Dy
             if xnew == X or not np.isfinite(xnew):
                 break
-            ynew = A0 + xnew * (A1 + xnew * (A2 + 4. * xnew * xnew))
+            ynew = A0 + xnew * (A1 + xnew * (A2 + 4.0 * xnew * xnew))
             if abs(ynew) >= abs(Y):
                 break
             X, Y = xnew, ynew
 
-        det = X ** 2 - X * Mz + Cov_xy
-        Xcenter = (Mxz * (Myy - X) - Myz * Mxy) / det / 2.
-        Ycenter = (Myz * (Mxx - X) - Mxz * Mxy) / det / 2.
+        det = X**2 - X * Mz + Cov_xy
+        Xcenter = (Mxz * (Myy - X) - Myz * Mxy) / det / 2.0
+        Ycenter = (Myz * (Mxx - X) - Mxz * Mxy) / det / 2.0
 
         xc: float = Xcenter + xMean
         yc: float = Ycenter + yMean
-        r = np.sqrt(abs(Xcenter ** 2 + Ycenter ** 2 + Mz))
+        r = np.sqrt(abs(Xcenter**2 + Ycenter**2 + Mz))
         return np.array((xc, yc)), r
-
 
 
 def liesOnSegment(start, end, point, tolerance=fromMm(0.01)):
@@ -538,6 +613,7 @@ def liesOnSegment(start, end, point, tolerance=fromMm(0.01)):
     point = Point(point)
     candidatePoint, _ = nearest_points(segment, point)
     return candidatePoint.distance(point) < tolerance
+
 
 def biteBoundary(boundary, pointA, pointB, tolerance=fromMm(0.01)):
     """
@@ -587,13 +663,15 @@ def closestIntersectionPoint(origin, direction, outline, maxDistance):
         if TABFAIL_VISUAL:
             import matplotlib.pyplot as plt
 
-            plt.axis('equal')
+            plt.axis("equal")
             x, y = outline.coords.xy
             plt.plot(list(map(toMm, x)), list(map(toMm, y)))
             x, y = testLine.coords.xy
             plt.plot(list(map(toMm, x)), list(map(toMm, y)))
             plt.show()
-        raise NoIntersectionError(f"No intersection found within given distance", origin)
+        raise NoIntersectionError(
+            f"No intersection found within given distance", origin
+        )
     origin = Point(origin[0], origin[1])
     geoms = list()
     for geom in listGeometries(inter):
@@ -604,8 +682,11 @@ def closestIntersectionPoint(origin, direction, outline, maxDistance):
             # ending points are the nearest one
             geoms.extend([Point(geom.coords[0]), Point(geom.coords[-1])])
         else:
-            raise TypeError(f"intersection() returned an unsupported datatype: {geom.__class__.__name__}")
+            raise TypeError(
+                f"intersection() returned an unsupported datatype: {geom.__class__.__name__}"
+            )
     return min([(g, origin.distance(g)) for g in geoms], key=lambda t: t[1])[0]
+
 
 def closestRing(geom, origin, direction, maxDistance):
     """
@@ -615,7 +696,7 @@ def closestRing(geom, origin, direction, maxDistance):
     holes (e.g., frame geometry with milled slots).
     """
     bestRing = None
-    bestDist = float('inf')
+    bestDist = float("inf")
     originPoint = Point(origin[0], origin[1])
     for ring in [geom.exterior] + list(geom.interiors):
         try:
@@ -630,6 +711,7 @@ def closestRing(geom, origin, direction, maxDistance):
         raise NoIntersectionError("No intersection found within given distance", origin)
     return bestRing
 
+
 def linestringToKicad(linestring):
     """
     Convert Shapely linestring to KiCAD's linechain
@@ -640,13 +722,17 @@ def linestringToKicad(linestring):
         lineChain.Append(int(c[0]), int(c[1]))
     return lineChain
 
+
 class Substrate:
     """
     Represents (possibly multiple) PCB substrates reconstructed from a list of
     geometry
     """
+
     def __init__(self, geometryList, bufferDistance=0, revertTransformation=None):
-        polygons = [toShapely(ring, geometryList) for ring in extractRings(geometryList)]
+        polygons = [
+            toShapely(ring, geometryList) for ring in extractRings(geometryList)
+        ]
         self.substrates = unary_union(substratesFrom(polygons))
         self.oriented = False
         if not self.substrates.is_empty:
@@ -716,12 +802,16 @@ class Substrate:
         """
         Produces a list of PCB_SHAPE on the Edge.Cuts layer
         """
-        if isinstance(self.substrates, MultiPolygon) or isinstance(self.substrates, GeometryCollection):
+        if isinstance(self.substrates, MultiPolygon) or isinstance(
+            self.substrates, GeometryCollection
+        ):
             geoms = self.substrates.geoms
         elif isinstance(self.substrates, Polygon):
             geoms = [self.substrates]
         else:
-            raise RuntimeError("Uknown type '{}' of substrate geometry".format(type(self.substrates)))
+            raise RuntimeError(
+                "Uknown type '{}' of substrate geometry".format(type(self.substrates))
+            )
         items = []
         for polygon in geoms:
             simplified_polygon = shapely.simplify(polygon, SHP_EPSILON)
@@ -738,8 +828,12 @@ class Substrate:
 
         # Always start with the longes semgent (so we do not start in the middle
         # of an arc if possible)
-        coords = np.array(coords[:-1])  # Exclude the last point since it's a duplicate of the first
-        distances = np.sqrt(np.sum(np.diff(coords, axis=0, append=coords[:1,:])**2, axis=1))
+        coords = np.array(
+            coords[:-1]
+        )  # Exclude the last point since it's a duplicate of the first
+        distances = np.sqrt(
+            np.sum(np.diff(coords, axis=0, append=coords[:1, :]) ** 2, axis=1)
+        )
         max_dist_index = np.argmax(distances)
         rearranged = np.roll(coords, -max_dist_index, axis=0)
         coords = np.vstack((rearranged, rearranged[0]))
@@ -747,7 +841,7 @@ class Substrate:
         segments = []
         i = 0
         while i < len(coords):
-            j = i # in the case the following cycle never happens
+            j = i  # in the case the following cycle never happens
             candidateCircle = CircleFitCandidates(tolerance=TOLERANCE)
             if reconstructArcs:
                 for j in range(i, len(coords)):
@@ -755,9 +849,15 @@ class Substrate:
                     if not candidateCircle.addPoint(coords[j]):
                         break
 
-            if candidateCircle.foundCircle is not None and candidateCircle.foundCircle[1] > fromMm(0.25):
+            if candidateCircle.foundCircle is not None and candidateCircle.foundCircle[
+                1
+            ] > fromMm(0.25):
                 center, radius = candidateCircle.foundCircle
-                start, end, mid = candidateCircle.start, candidateCircle.end, candidateCircle.mid
+                start, end, mid = (
+                    candidateCircle.start,
+                    candidateCircle.end,
+                    candidateCircle.mid,
+                )
 
                 # We prefer to preserve arc start and end points, adjust center
                 # so it is true:
@@ -772,14 +872,19 @@ class Substrate:
 
                     # Due to numerical errors, the height might be invalid, if
                     # so, assume it is zero
-                    heightSquared = radius ** 2 - chordLength ** 2 / 4
+                    heightSquared = radius**2 - chordLength**2 / 4
                     if heightSquared < 0:
                         height = 0
                     else:
                         height = np.sqrt(heightSquared)
 
-                    centerCandidates = [chordMidpoint + normal * height, chordMidpoint - normal * height]
-                    center = min(centerCandidates, key=lambda c: np.linalg.norm(c - center))
+                    centerCandidates = [
+                        chordMidpoint + normal * height,
+                        chordMidpoint - normal * height,
+                    ]
+                    center = min(
+                        centerCandidates, key=lambda c: np.linalg.norm(c - center)
+                    )
 
                     centerToMidpoint = chordMidpoint - center
                     centerToMidpointLength = np.linalg.norm(centerToMidpoint)
@@ -787,10 +892,21 @@ class Substrate:
                         centerToMidpoint = normal
                     else:
                         centerToMidpoint /= np.linalg.norm(centerToMidpoint)
-                    middleCandidates = [center + centerToMidpoint * radius, center - centerToMidpoint * radius]
-                    arcMiddle = min(middleCandidates, key=lambda c: np.linalg.norm(c - mid))
+                    middleCandidates = [
+                        center + centerToMidpoint * radius,
+                        center - centerToMidpoint * radius,
+                    ]
+                    arcMiddle = min(
+                        middleCandidates, key=lambda c: np.linalg.norm(c - mid)
+                    )
 
-                    segments.append(self._constructArc(toKiCADPoint(start), toKiCADPoint(arcMiddle), toKiCADPoint(end)))
+                    segments.append(
+                        self._constructArc(
+                            toKiCADPoint(start),
+                            toKiCADPoint(arcMiddle),
+                            toKiCADPoint(end),
+                        )
+                    )
 
                 i += len(candidateCircle) - 1
             else:
@@ -835,7 +951,8 @@ class Substrate:
         minx, miny, maxx, maxy = self.substrates.bounds
         return pcbnew.BOX2I(
             pcbnew.VECTOR2I(int(minx), int(miny)),
-            pcbnew.VECTOR2I(int(maxx - minx), int(maxy - miny)))
+            pcbnew.VECTOR2I(int(maxx - minx), int(maxy - miny)),
+        )
 
     def exterior(self):
         """
@@ -846,7 +963,9 @@ class Substrate:
         elif isinstance(self.substrates, Polygon):
             geoms = [self.substrates]
         else:
-            raise RuntimeError("Uknown type '{}' of substrate geometry".format(type(self.substrates)))
+            raise RuntimeError(
+                "Uknown type '{}' of substrate geometry".format(type(self.substrates))
+            )
         polygons = [Polygon(p.exterior) for p in geoms]
         return unary_union(polygons)
 
@@ -859,8 +978,15 @@ class Substrate:
         """
         return self.substrates.boundary
 
-    def tab(self, origin, direction, width, partitionLine=None,
-               maxHeight=pcbnew.FromMM(50), fillet=0):
+    def tab(
+        self,
+        origin,
+        direction,
+        width,
+        partitionLine=None,
+        maxHeight=pcbnew.FromMM(50),
+        fillet=0,
+    ):
         """
         Create a tab for the substrate. The tab starts at the specified origin
         (2D point) and tries to penetrate existing substrate in direction (a 2D
@@ -880,8 +1006,16 @@ class Substrate:
         """
         self.orient()
 
-        if self.substrates.contains(Point(origin)) and not self.substrates.boundary.contains(Point(origin)):
-            raise TabError(origin, direction, ["Tab annotation is placed inside the board. It has to be on edge or outside the board."])
+        if self.substrates.contains(
+            Point(origin)
+        ) and not self.substrates.boundary.contains(Point(origin)):
+            raise TabError(
+                origin,
+                direction,
+                [
+                    "Tab annotation is placed inside the board. It has to be on edge or outside the board."
+                ],
+            )
 
         origin = np.array(origin, dtype=np.float64)
         direction = np.around(normalize(direction), 4)
@@ -891,10 +1025,12 @@ class Substrate:
                 sideOriginA = origin + makePerpendicular(direction) * width / 2
                 sideOriginB = origin - makePerpendicular(direction) * width / 2
                 boundary = closestRing(geom, sideOriginA, direction, maxHeight)
-                splitPointA = closestIntersectionPoint(sideOriginA, direction,
-                    boundary, maxHeight)
-                splitPointB = closestIntersectionPoint(sideOriginB, direction,
-                    boundary, maxHeight)
+                splitPointA = closestIntersectionPoint(
+                    sideOriginA, direction, boundary, maxHeight
+                )
+                splitPointB = closestIntersectionPoint(
+                    sideOriginB, direction, boundary, maxHeight
+                )
                 tabFace = biteBoundary(boundary, splitPointB, splitPointA)
                 if partitionLine is None:
                     # There is nothing else to do, return the tab
@@ -906,17 +1042,29 @@ class Substrate:
                 direction = -direction
                 for p in listGeometries(partitionLine):
                     try:
-                        partitionSplitPointA = closestIntersectionPoint(splitPointA.coords[0] - direction * float(SHP_EPSILON),
-                                direction, p, maxHeight)
-                        partitionSplitPointB = closestIntersectionPoint(splitPointB.coords[0] - direction * float(SHP_EPSILON),
-                                direction, p, maxHeight)
-                    except NoIntersectionError: # We cannot span towards the partition line
+                        partitionSplitPointA = closestIntersectionPoint(
+                            splitPointA.coords[0] - direction * float(SHP_EPSILON),
+                            direction,
+                            p,
+                            maxHeight,
+                        )
+                        partitionSplitPointB = closestIntersectionPoint(
+                            splitPointB.coords[0] - direction * float(SHP_EPSILON),
+                            direction,
+                            p,
+                            maxHeight,
+                        )
+                    except (
+                        NoIntersectionError
+                    ):  # We cannot span towards the partition line
                         continue
                     if isLinestringCyclic(p):
                         candidates = [(partitionSplitPointA, partitionSplitPointB)]
                     else:
-                        candidates = [(partitionSplitPointA, partitionSplitPointB),
-                            (partitionSplitPointB, partitionSplitPointA)]
+                        candidates = [
+                            (partitionSplitPointA, partitionSplitPointB),
+                            (partitionSplitPointB, partitionSplitPointA),
+                        ]
                     for i, (spa, spb) in enumerate(candidates):
                         partitionFace = biteBoundary(p, spa, spb)
                         if partitionFace is None:
@@ -928,52 +1076,91 @@ class Substrate:
                         # penetrate the board substrate. Otherwise, there is a
                         # numerical instability on small slopes that yields
                         # artifacts on substrate union
-                        offsetTabFace = [(p[0] - float(SHP_EPSILON) * direction[0], p[1] - float(SHP_EPSILON) * direction[1]) for p in tabFace.coords]
-                        partitionFaceCoord = [(p[0] + float(SHP_EPSILON) * direction[0], p[1] + float(SHP_EPSILON) * direction[1]) for p in partitionFaceCoord]
+                        offsetTabFace = [
+                            (
+                                p[0] - float(SHP_EPSILON) * direction[0],
+                                p[1] - float(SHP_EPSILON) * direction[1],
+                            )
+                            for p in tabFace.coords
+                        ]
+                        partitionFaceCoord = [
+                            (
+                                p[0] + float(SHP_EPSILON) * direction[0],
+                                p[1] + float(SHP_EPSILON) * direction[1],
+                            )
+                            for p in partitionFaceCoord
+                        ]
                         tab = Polygon(offsetTabFace + partitionFaceCoord)
                         return self._makeTabFillet(tab, tabFace, fillet)
                 return None, None
             except NoIntersectionError as e:
                 continue
             except TabFilletError as e:
-                raise TabError(origin, direction, ["This is a bug. Please open an issue and provide the board on which the fillet failed."])
+                raise TabError(
+                    origin,
+                    direction,
+                    [
+                        "This is a bug. Please open an issue and provide the board on which the fillet failed."
+                    ],
+                )
 
-        raise TabError(origin, direction, [
-            "too wide tab so it does not hit the board",
-            "annotation is placed inside the board",
-            "ray length is not sufficient"
-        ])
+        raise TabError(
+            origin,
+            direction,
+            [
+                "too wide tab so it does not hit the board",
+                "annotation is placed inside the board",
+                "ray length is not sufficient",
+            ],
+        )
 
-    def _makeTabFillet(self, tab: Polygon, tabFace: LineString, fillet: KiLength) \
-            -> Tuple[Polygon, LineString]:
+    def _makeTabFillet(
+        self, tab: Polygon, tabFace: LineString, fillet: KiLength
+    ) -> Tuple[Polygon, LineString]:
         if fillet == 0:
             return tab, tabFace
         joined = self.substrates.union(tab)
         RESOLUTION = 64
-        rounded = joined.buffer(fillet, resolution=RESOLUTION).buffer(-fillet, resolution=RESOLUTION)
-        remainder = rounded.difference(self.substrates,)
+        rounded = joined.buffer(fillet, resolution=RESOLUTION).buffer(
+            -fillet, resolution=RESOLUTION
+        )
+        remainder = rounded.difference(
+            self.substrates,
+        )
 
-        if isinstance(remainder, MultiPolygon) or isinstance(remainder, GeometryCollection):
+        if isinstance(remainder, MultiPolygon) or isinstance(
+            remainder, GeometryCollection
+        ):
             geoms = remainder.geoms
         elif isinstance(remainder, Polygon):
             geoms = [remainder]
         else:
-            raise RuntimeError("Uknown type '{}' of substrate geometry".format(type(remainder)))
+            raise RuntimeError(
+                "Uknown type '{}' of substrate geometry".format(type(remainder))
+            )
         candidates = [x for x in geoms if x.intersects(tab)]
         if len(candidates) != 1:
-            raise TabFilletError(f"Unexpected number of fillet candidates: {len(candidates)}")
+            raise TabFilletError(
+                f"Unexpected number of fillet candidates: {len(candidates)}"
+            )
         # Shapely is numerically unstable for this, bloat the polygon slighlty
         # to ensure there is an intersection
         candidate = candidates[0].buffer(SHP_EPSILON)
 
         newFace = candidate.intersection(self.substrates.boundary)
         if isinstance(newFace, GeometryCollection):
-            newFace = MultiLineString([x for x in newFace.geoms if not isinstance(x, Polygon)])
+            newFace = MultiLineString(
+                [x for x in newFace.geoms if not isinstance(x, Polygon)]
+            )
         if isinstance(newFace, MultiLineString):
             newFace = shapely.ops.linemerge(newFace)
         if not isinstance(newFace, LineString):
-            raise TabFilletError(f"Unexpected result of filleted tab face: {type(newFace)}, {json.dumps(shapely.geometry.mapping(newFace), indent=4)}")
-        if Point(tabFace.coords[0]).distance(Point(newFace.coords[0])) > Point(tabFace.coords[0]).distance(Point(newFace.coords[-1])):
+            raise TabFilletError(
+                f"Unexpected result of filleted tab face: {type(newFace)}, {json.dumps(shapely.geometry.mapping(newFace), indent=4)}"
+            )
+        if Point(tabFace.coords[0]).distance(Point(newFace.coords[0])) > Point(
+            tabFace.coords[0]
+        ).distance(Point(newFace.coords[-1])):
             newFace = LineString(reversed(newFace.coords))
         return candidate, newFace
 
@@ -989,15 +1176,16 @@ class Substrate:
         Add fillets to inner corners which will be produced by a mill with
         given radius.
         """
-        EPS = 1000 # This number is intentionally near KiCAD's resolution of 1nm to not enclose narrow slots, but to preserve radius
+        EPS = 1000  # This number is intentionally near KiCAD's resolution of 1nm to not enclose narrow slots, but to preserve radius
         RES = 32
         if millRadius < EPS:
             return
         self.orient()
-        self.substrates = self.substrates.buffer(millRadius - EPS, resolution=RES) \
-                              .buffer(-millRadius, resolution=RES) \
-                              .buffer(EPS, resolution=RES)
-
+        self.substrates = (
+            self.substrates.buffer(millRadius - EPS, resolution=RES)
+            .buffer(-millRadius, resolution=RES)
+            .buffer(EPS, resolution=RES)
+        )
 
     def removeIslands(self):
         """
@@ -1031,7 +1219,9 @@ class Substrate:
         Translate substrate by vec
         """
         self.substrates = shapely.affinity.translate(self.substrates, vec[0], vec[1])
-        self.partitionLine = shapely.affinity.translate(self.partitionLine, vec[0], vec[1])
+        self.partitionLine = shapely.affinity.translate(
+            self.partitionLine, vec[0], vec[1]
+        )
         for annotation in self.annotations:
             o = annotation.origin
             annotation.origin = (o[0] + vec[0], o[1] + vec[1])
@@ -1041,44 +1231,49 @@ class Substrate:
             if orig is not None:
                 return orig(prevPoint)
             return prevPoint
+
         self.revertTransformation = newRevertTransformation
+
 
 def showPolygon(polygon):
     import matplotlib.pyplot as plt
 
-    plt.axis('equal')
-    x,y = polygon.exterior.xy
-    plt.fill(x,y)
+    plt.axis("equal")
+    x, y = polygon.exterior.xy
+    plt.fill(x, y)
     for inter in polygon.interiors:
         x, y = inter.xy
-        plt.fill(x, y, color='w')
+        plt.fill(x, y, color="w")
     plt.show()
+
 
 def showPolygons(polygons):
     import matplotlib.pyplot as plt
 
-    plt.axis('equal')
+    plt.axis("equal")
     for polygon in polygons:
-        x,y = polygon.exterior.xy
-        plt.fill(x,y, zorder=1)
+        x, y = polygon.exterior.xy
+        plt.fill(x, y, zorder=1)
         for inter in polygon.interiors:
             x2, y2 = inter.xy
             plt.fill(x2, y2, color="w")
     plt.show()
 
+
 class SubstrateNeighbors:
     """
     Thin wrapper around BoxNeighbors for finding substrate pieces' neighbors.
     """
+
     def __init__(self, substrates):
-        self._revMap = { id(s): s for s in substrates }
-        self._neighbors = BoxNeighbors( { id(s): s.bounds() for s in substrates })
+        self._revMap = {id(s): s for s in substrates}
+        self._neighbors = BoxNeighbors({id(s): s.bounds() for s in substrates})
 
     def _reverse(self, queryRes):
-        return [self._revMap[ x ] for x in queryRes]
+        return [self._revMap[x] for x in queryRes]
 
     def _reverseC(self, queryRes):
-        return [(self._revMap[ x ], shadow) for x, shadow in queryRes]
+        return [(self._revMap[x], shadow) for x, shadow in queryRes]
 
     def left(self, s):
         return self._reverse(self._neighbors.left(id(s)))
@@ -1104,25 +1299,36 @@ class SubstrateNeighbors:
     def topC(self, s):
         return self._reverseC(self._neighbors.topC(id(s)))
 
+
 class SubstratePartitionLines:
     """
     Thin wrapper around BoxPartitionLines for finding substrate pieces'
     partition lines. It allows you to specify ghost substrates. No partition
     line is formed between two ghost substrates.
     """
-    def __init__(self, substrates, ghostSubstrates=[],
-                 safeHorizontalMargin=0, safeVerticalMargin=0):
+
+    def __init__(
+        self,
+        substrates,
+        ghostSubstrates=[],
+        safeHorizontalMargin=0,
+        safeVerticalMargin=0,
+    ):
         boxes = {id(s): s.bounds() for s in chain(substrates, ghostSubstrates)}
         ghosts = set([id(s) for s in ghostSubstrates])
         SEED_LIMIT_SIZE = pcbnew.FromMM(0.01)
+
         def seedFilter(idA, idB, v, l):
             if l.length < SEED_LIMIT_SIZE:
                 return False
             return idA not in ghosts or idB not in ghosts
+
         self._partition = BoxPartitionLines(
             self._preprocessBoxes(boxes),
             seedFilter,
-            safeHorizontalMargin, safeVerticalMargin)
+            safeHorizontalMargin,
+            safeVerticalMargin,
+        )
 
     def _preprocessBoxes(self, boxes):
         """
@@ -1142,7 +1348,7 @@ class SubstratePartitionLines:
                 b[0] + SHP_EPSILON if b[0] != minx else minx,
                 b[1] + SHP_EPSILON if b[1] != miny else miny,
                 b[2] - SHP_EPSILON if b[2] != maxx else maxx,
-                b[3] - SHP_EPSILON if b[3] != maxy else maxy
+                b[3] - SHP_EPSILON if b[3] != maxy else maxy,
             )
         return newBoxes
 
@@ -1152,4 +1358,3 @@ class SubstratePartitionLines:
 
     def partitionSubstrate(self, substrate):
         return self._partition.partitionLines(id(substrate))
-

@@ -1,17 +1,26 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class KiKitActionPlugin:
     package: str
     name: str
     description: str
 
+
 availablePlugins = [
-    KiKitActionPlugin("hideReferences", "Show/hide references",
-        "Allows you to batch show or hide references based on regular expression"),
-    KiKitActionPlugin("panelize", "Panelize design",
-        "Allows you to specify panelization process via GUI")
+    KiKitActionPlugin(
+        "hideReferences",
+        "Show/hide references",
+        "Allows you to batch show or hide references based on regular expression",
+    ),
+    KiKitActionPlugin(
+        "panelize",
+        "Panelize design",
+        "Allows you to specify panelization process via GUI",
+    ),
 ]
+
 
 def importAllPlugins():
     """

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import setuptools
-import versioneer
 
+import versioneer
 
 with open("README.md", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="kikit",
-    python_requires='>=3.8',  # if you bump this, be sure to also adjust the matrix in .github/workflows/test-kikit.yml
+    python_requires=">=3.8",  # if you bump this, be sure to also adjust the matrix in .github/workflows/test-kikit.yml
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     author="Jan Mrázek",
@@ -25,13 +25,13 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "numpy", # Required for MacOS
+        "numpy",  # Required for MacOS
         "shapely>=2.0.3",
         "click>=7.1",
         "markdown2>=2.4",
         "pybars3>=0.9",
         "solidpython>=1.1.2",
-        "commentjson>=0.9"
+        "commentjson>=0.9",
     ],
     extras_require={
         "dev": [
@@ -39,6 +39,8 @@ setuptools.setup(
             "pytest",
             "build",
             "wheel",
+            "black",
+            "isort",
         ],
     },
     zip_safe=False,
@@ -48,10 +50,10 @@ setuptools.setup(
             "resources/**",
         ],
     },
-    entry_points = {
+    entry_points={
         "console_scripts": [
             "kikit=kikit.ui:cli",
-            "kikit-info=kikit.info:cli"
+            "kikit-info=kikit.info:cli",
         ],
-    }
+    },
 )

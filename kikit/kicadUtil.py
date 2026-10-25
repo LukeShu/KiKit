@@ -1,8 +1,10 @@
 from typing import Tuple
+
 from .common import KiLength
-from .units import mm
-from .sexpr import SExpr, findNode
 from .defs import PAPER_DIMENSIONS
+from .sexpr import SExpr, findNode
+from .units import mm
+
 
 def getPageDimensionsFromAst(ast: SExpr) -> Tuple[KiLength, KiLength]:
     paperNode = findNode(ast, "paper")
@@ -22,4 +24,3 @@ def getPageDimensionsFromAst(ast: SExpr) -> Tuple[KiLength, KiLength]:
         return tuple(int(x) for x in size)
     except KeyError:
         raise RuntimeError(f"Uknown paper size {value}") from None
-

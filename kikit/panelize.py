@@ -1,47 +1,72 @@
-from copy import deepcopy
+import fnmatch
 import itertools
+import json
+import os
+import re
 import textwrap
-import pcbnew
-from pcbnew import LoadBoard, ToMM, VECTOR2I, BOX2I, EDA_ANGLE
-from kikit import sexpr
-from kikit.common import normalize
-from kikit.pcbnew_utils import resolveItem, setDoNotAllowZoneFills, DIM_UNITS_MODE_MM
-
-from pathlib import Path
-
-from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, Union
+from collections import OrderedDict
+from copy import deepcopy
+from dataclasses import dataclass
 from enum import Enum
-from shapely.geometry import (Polygon, MultiPolygon, Point, LineString, box,
-                              GeometryCollection, MultiLineString)
-from shapely.prepared import prep
+from itertools import chain, product
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Set, Tuple, Union
+
+import numpy as np
+import pcbnew
 import shapely
 import shapely.affinity
-from itertools import product, chain
-import numpy as np
-import os
-import json
-import re
-import fnmatch
-from collections import OrderedDict
-from dataclasses import dataclass
+from pcbnew import BOX2I, EDA_ANGLE, VECTOR2I, LoadBoard, ToMM
+from shapely.geometry import (
+    GeometryCollection,
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Point,
+    Polygon,
+    box,
+)
+from shapely.prepared import prep
 
-from kikit import substrate
-from kikit import units
-from kikit.kicadUtil import getPageDimensionsFromAst
-from kikit.substrate import Substrate, linestringToKicad, extractRings, TabError, TabFilletError
-from kikit.defs import PAPER_DIMENSIONS, STROKE_T, Layer, EDA_TEXT_HJUSTIFY_T, EDA_TEXT_VJUSTIFY_T, PAPER_SIZES
-from kikit.common import *
-from kikit.sexpr import isElement, parseSexprF, SExpr, Atom, findNode, parseSexprListF
+from kikit import sexpr, substrate, units
 from kikit.annotations import AnnotationReader, TabAnnotation
+from kikit.common import *
+from kikit.common import normalize
+from kikit.defs import (
+    EDA_TEXT_HJUSTIFY_T,
+    EDA_TEXT_VJUSTIFY_T,
+    PAPER_DIMENSIONS,
+    PAPER_SIZES,
+    STROKE_T,
+    Layer,
+)
 from kikit.drc import DrcExclusion, readBoardDrcExclusions, serializeExclusion
-from kikit.units import mm, deg, inch
-from kikit.pcbnew_utils import duplicateZone, increaseZonePriorities
+from kikit.kicadUtil import getPageDimensionsFromAst
+from kikit.pcbnew_utils import (
+    DIM_UNITS_MODE_MM,
+    duplicateZone,
+    increaseZonePriorities,
+    resolveItem,
+    setDoNotAllowZoneFills,
+)
+from kikit.sexpr import Atom, SExpr, findNode, isElement, parseSexprF, parseSexprListF
+from kikit.substrate import (
+    Substrate,
+    TabError,
+    TabFilletError,
+    extractRings,
+    linestringToKicad,
+)
+from kikit.units import deg, inch, mm
+
 
 class PanelError(RuntimeError):
     pass
 
+
 class TooLargeError(PanelError):
     pass
+
 
 class NonFatalErrors(PanelError):
     def __init__(self, errors: List[Tuple[KiPoint, str]]) -> None:
@@ -57,8 +82,10 @@ class NonFatalErrors(PanelError):
         message = message[:-1]
         super().__init__(message)
 
+
 def identity(x):
     return x
+
 
 class GridPlacerBase:
     def position(self, i: int, j: int, boardSize: Optional[BOX2I]) -> VECTOR2I:
@@ -78,16 +105,26 @@ class GridPlacerBase:
         """
         return EDA_ANGLE(0, pcbnew.DEGREES_T)
 
+
 class BasicGridPosition(GridPlacerBase):
     """
     Specify board position in the grid.
     Supports optional odd-row/odd-column spacing offsets.
     """
-    def __init__(self, horSpace: int, verSpace: int,
-                 hbonewidth: int = 0, vbonewidth: int = 0,
-                 hboneskip: int = 0, vboneskip: int = 0,
-                 hbonefirst: int = 0, vbonefirst: int = 0,
-                 hevendiff: int = 0, vevendiff: int = 0) -> None:
+
+    def __init__(
+        self,
+        horSpace: int,
+        verSpace: int,
+        hbonewidth: int = 0,
+        vbonewidth: int = 0,
+        hboneskip: int = 0,
+        vboneskip: int = 0,
+        hbonefirst: int = 0,
+        vbonefirst: int = 0,
+        hevendiff: int = 0,
+        vevendiff: int = 0,
+    ) -> None:
         self.horSpace = horSpace
         self.verSpace = verSpace
         self.hbonewidth = hbonewidth
@@ -112,8 +149,11 @@ class BasicGridPosition(GridPlacerBase):
             delta = self.horSpace + (self.hevendiff if col % 2 == 1 else 0)
             x += w + delta
 
-        vbonecount = 0 if self.vbonewidth == 0 \
+        vbonecount = (
+            0
+            if self.vbonewidth == 0
             else max((j + self.vbonefirst) // (self.vboneskip + 1), 0)
+        )
         x += vbonecount * (self.vbonewidth + self.horSpace)
 
         # Accumulate vertical offset
@@ -122,34 +162,43 @@ class BasicGridPosition(GridPlacerBase):
             delta = self.verSpace + (self.vevendiff if row % 2 == 1 else 0)
             y += h + delta
 
-        hbonecount = 0 if self.hbonewidth == 0 \
+        hbonecount = (
+            0
+            if self.hbonewidth == 0
             else max((i + self.hbonefirst) // (self.hboneskip + 1), 0)
+        )
         y += hbonecount * (self.hbonewidth + self.verSpace)
 
         return toKiCADPoint((x, y))
+
 
 class OddEvenRowsPosition(BasicGridPosition):
     """
     Rotate boards by 180° for every row
     """
+
     def rotation(self, i: int, j: int) -> KiAngle:
         if i % 2 == 0:
             return EDA_ANGLE(0, pcbnew.DEGREES_T)
         return EDA_ANGLE(180, pcbnew.DEGREES_T)
 
+
 class OddEvenColumnPosition(BasicGridPosition):
     """
     Rotate boards by 180° for every column
     """
+
     def rotation(self, i: int, j: int) -> KiAngle:
         if j % 2 == 0:
             return EDA_ANGLE(0, pcbnew.DEGREES_T)
         return EDA_ANGLE(180, pcbnew.DEGREES_T)
 
+
 class OddEvenRowsColumnsPosition(BasicGridPosition):
     """
     Rotate boards by 180 for every row and column
     """
+
     def rotation(self, i: int, j: int) -> KiAngle:
         if (i % 2) == (j % 2):
             return EDA_ANGLE(0, pcbnew.DEGREES_T)
@@ -164,11 +213,12 @@ class Origin(Enum):
     BottomRight = 4
 
 
-class NetClass():
+class NetClass:
     """
     Internal representation of a netclass. Work-around for KiCAD 6.0.6 missing
     support for netclasses in API
     """
+
     def __init__(self, netClassDef: Any) -> None:
         self.data = netClassDef
         self.nets: Set[str] = set()
@@ -187,11 +237,13 @@ class NetClass():
     def serialize(self) -> Any:
         return deepcopy(self.data)
 
+
 def netClassesDefaultFirst(netClasses: Iterable[Any]) -> List[Any]:
     netClasses = list(netClasses)
     defaults = [x for x in netClasses if x["name"].rsplit("-", 1)[-1] == "Default"]
     custom = [x for x in netClasses if x["name"].rsplit("-", 1)[-1] != "Default"]
     return defaults + custom
+
 
 def reloadProject(projectPath: str) -> None:
     projectPath = str(Path(projectPath).resolve())
@@ -201,11 +253,13 @@ def reloadProject(projectPath: str) -> None:
         settingsManager.UnloadProject(project, False)
     settingsManager.LoadProject(projectPath)
 
+
 def getOriginCoord(origin, bBox):
     """Returns real coordinates (VECTOR2I) of the origin for given bounding box"""
     if origin == Origin.Center:
-        return VECTOR2I(bBox.GetX() + bBox.GetWidth() // 2,
-                        bBox.GetY() + bBox.GetHeight() // 2)
+        return VECTOR2I(
+            bBox.GetX() + bBox.GetWidth() // 2, bBox.GetY() + bBox.GetHeight() // 2
+        )
     if origin == Origin.TopLeft:
         return VECTOR2I(bBox.GetX(), bBox.GetY())
     if origin == Origin.TopRight:
@@ -215,8 +269,12 @@ def getOriginCoord(origin, bBox):
     if origin == Origin.BottomRight:
         return VECTOR2I(bBox.GetX() + bBox.GetWidth(), bBox.GetY() + bBox.GetHeight())
 
-def appendItem(board: pcbnew.BOARD, item: pcbnew.BOARD_ITEM,
-               yieldMapping: Optional[Callable[[str, str], None]]=None) -> None:
+
+def appendItem(
+    board: pcbnew.BOARD,
+    item: pcbnew.BOARD_ITEM,
+    yieldMapping: Optional[Callable[[str, str], None]] = None,
+) -> None:
     """
     Make a coppy of the item and append it to the board. Allows to append items
     from one board to another.
@@ -227,14 +285,18 @@ def appendItem(board: pcbnew.BOARD, item: pcbnew.BOARD_ITEM,
     """
     try:
         newItem = item.Duplicate()
-    except TypeError: # Footprint has overridden the method, cannot be called directly
+    except TypeError:  # Footprint has overridden the method, cannot be called directly
         newItem = pcbnew.Cast_to_BOARD_ITEM(item).Duplicate().Cast()
     board.Add(newItem)
     if not yieldMapping:
         return
     if isinstance(item, pcbnew.FOOTPRINT):
         newFootprint = pcbnew.Cast_to_FOOTPRINT(newItem)
-        for getter in [lambda x: x.Pads(), lambda x: x.GraphicalItems(), lambda x: x.Zones()]:
+        for getter in [
+            lambda x: x.Pads(),
+            lambda x: x.GraphicalItems(),
+            lambda x: x.Zones(),
+        ]:
             oldList = getter(item)
             newList = getter(newFootprint)
             assert len(oldList) == len(newList)
@@ -243,35 +305,48 @@ def appendItem(board: pcbnew.BOARD, item: pcbnew.BOARD_ITEM,
                 yieldMapping(o.m_Uuid.AsString(), n.m_Uuid.AsString())
     yieldMapping(item.m_Uuid.AsString(), newItem.m_Uuid.AsString())
 
+
 def collectNetNames(board):
     return [str(x) for x in board.GetNetInfo().NetsByName() if len(str(x)) > 0]
+
 
 def remapNets(collection, mapping):
     for item in collection:
         item.SetNetCode(mapping[item.GetNetname()].GetNetCode())
 
+
 ToPolygonGeometry = Union[Polygon, BOX2I, Substrate]
+
+
 def toPolygon(entity: Union[List[ToPolygonGeometry], ToPolygonGeometry]) -> Polygon:
     if isinstance(entity, list):
         return list([toPolygon(e) for e in entity])
     if isinstance(entity, Polygon) or isinstance(entity, MultiPolygon):
         return entity
     if isinstance(entity, BOX2I):
-        return Polygon([
-            (entity.GetX(), entity.GetY()),
-            (entity.GetX() + entity.GetWidth(), entity.GetY()),
-            (entity.GetX() + entity.GetWidth(), entity.GetY() + entity.GetHeight()),
-            (entity.GetX(), entity.GetY() + entity.GetHeight())])
+        return Polygon(
+            [
+                (entity.GetX(), entity.GetY()),
+                (entity.GetX() + entity.GetWidth(), entity.GetY()),
+                (entity.GetX() + entity.GetWidth(), entity.GetY() + entity.GetHeight()),
+                (entity.GetX(), entity.GetY() + entity.GetHeight()),
+            ]
+        )
     if isinstance(entity, Substrate):
         return Substrate.substrates
     raise NotImplementedError("Cannot convert {} to Polygon".format(type(entity)))
 
+
 def rectString(rect):
     return "({}, {}) w: {}, h: {}".format(
-                ToMM(rect.GetX()), ToMM(rect.GetY()),
-                ToMM(rect.GetWidth()), ToMM(rect.GetHeight()))
+        ToMM(rect.GetX()),
+        ToMM(rect.GetY()),
+        ToMM(rect.GetWidth()),
+        ToMM(rect.GetHeight()),
+    )
 
-def expandRect(rect: BOX2I, offsetX: KiLength, offsetY: Optional[KiLength]=None):
+
+def expandRect(rect: BOX2I, offsetX: KiLength, offsetY: Optional[KiLength] = None):
     """
     Given a BOX2I returns a new rectangle, which is larger in all directions
     by offset. If only offsetX is passed, it used for both X and Y offset
@@ -281,23 +356,29 @@ def expandRect(rect: BOX2I, offsetX: KiLength, offsetY: Optional[KiLength]=None)
     offsetX = int(offsetX)
     offsetY = int(offsetY)
     return BOX2I(
-            VECTOR2I(rect.GetX() - offsetX, rect.GetY() - offsetY),
-            VECTOR2I(rect.GetWidth() + 2 * offsetX, rect.GetHeight() + 2 * offsetY))
+        VECTOR2I(rect.GetX() - offsetX, rect.GetY() - offsetY),
+        VECTOR2I(rect.GetWidth() + 2 * offsetX, rect.GetHeight() + 2 * offsetY),
+    )
+
 
 def rectToRing(rect):
     return [
         (rect.GetX(), rect.GetY()),
         (rect.GetX() + rect.GetWidth(), rect.GetY()),
         (rect.GetX() + rect.GetWidth(), rect.GetY() + rect.GetHeight()),
-        (rect.GetX(), rect.GetY() + rect.GetHeight())
+        (rect.GetX(), rect.GetY() + rect.GetHeight()),
     ]
+
 
 def roundPoint(point, precision=-4):
     if isinstance(point, Point):
         return Point(round(point.x, precision), round(point.y, precision))
     return Point(round(point[0], precision), round(point[1], precision))
 
-def doTransformation(point: KiPoint, rotation: KiAngle, origin: KiPoint, translation: KiPoint) -> VECTOR2I:
+
+def doTransformation(
+    point: KiPoint, rotation: KiAngle, origin: KiPoint, translation: KiPoint
+) -> VECTOR2I:
     """
     Abuses KiCAD to perform a tranformation of a point
     """
@@ -309,6 +390,7 @@ def doTransformation(point: KiPoint, rotation: KiAngle, origin: KiPoint, transla
     segment.Move(toKiCADPoint(translation))
     # We build a fresh VECTOR2I - otherwise there is a shared reference
     return VECTOR2I(segment.GetStartX(), segment.GetStartY())
+
 
 def undoTransformation(point, rotation, origin, translation):
     """
@@ -326,6 +408,7 @@ def undoTransformation(point, rotation, origin, translation):
     # We build a fresh VECTOR2I - otherwise there is a shared reference
     return VECTOR2I(segment.GetStartX(), segment.GetStartY())
 
+
 def removeCutsFromFootprint(footprint):
     """
     Find all graphical items in the footprint, remove them and return them as a
@@ -340,6 +423,7 @@ def removeCutsFromFootprint(footprint):
         footprint.Remove(e)
     return edges
 
+
 def renameNets(board, renamer):
     """
     Given a board and renaming function (taking original name, returning new
@@ -348,7 +432,7 @@ def renameNets(board, renamer):
     originalNetNames = collectNetNames(board)
     netinfo = board.GetNetInfo()
 
-    newNetMapping = { "": netinfo.GetNetItem("") }
+    newNetMapping = {"": netinfo.GetNetItem("")}
     newNames = set()
     for name in originalNetNames:
         newName = renamer(name)
@@ -360,12 +444,19 @@ def renameNets(board, renamer):
     remapNets(board.GetPads(), newNetMapping)
     remapNets(board.GetTracks(), newNetMapping)
     remapNets(board.Zones(), newNetMapping)
-    remapNets((d for d in board.GetDrawings()
-               if hasattr(d, "GetNetname") and d.GetNetname() in newNetMapping), newNetMapping)
+    remapNets(
+        (
+            d
+            for d in board.GetDrawings()
+            if hasattr(d, "GetNetname") and d.GetNetname() in newNetMapping
+        ),
+        newNetMapping,
+    )
 
     for name in originalNetNames:
         if name != "" and name not in newNames:
             board.RemoveNative(netinfo.GetNetItem(name))
+
 
 def renameRefs(board, renamer, bakeRef):
     """
@@ -390,6 +481,7 @@ def renameRefs(board, renamer, bakeRef):
             ref.SetVisible(False)
         ref.SetText(renamer(ref.GetText()))
 
+
 def isBoardEdge(edge):
     """
     Decide whether the drawing is a board edge or not.
@@ -398,12 +490,14 @@ def isBoardEdge(edge):
     """
     return isinstance(edge, pcbnew.PCB_SHAPE) and edge.GetLayer() == pcbnew.Edge_Cuts
 
+
 def tabSpacing(width, count):
     """
     Given a width of board edge and tab count, return an iterable with tab
     offsets.
     """
     return [width * i / (count + 1) for i in range(1, count + 1)]
+
 
 def prolongCut(cut, prolongation):
     """
@@ -413,6 +507,7 @@ def prolongCut(cut, prolongation):
     c[0] += normalize(c[0] - c[1]) * prolongation
     c[-1] += normalize(c[-1] - c[-2]) * prolongation
     return LineString(c)
+
 
 def polygonToZone(polygon, board):
     """
@@ -426,6 +521,7 @@ def polygonToZone(polygon, board):
         boundary = hole.exterior
         zone.Outline().AddHole(linestringToKicad(boundary))
     return zone
+
 
 def cropZoneByPolygon(zone: pcbnew.ZONE, polygon: Polygon) -> None:
     """
@@ -450,10 +546,14 @@ def cropZoneByPolygon(zone: pcbnew.ZONE, polygon: Polygon) -> None:
         for hole in geom.interiors:
             zone.Outline().AddHole(linestringToKicad(hole))
 
-def buildTabs(panel: "Panel", substrate: Substrate,
-              partitionLines: Union[GeometryCollection, LineString],
-              tabAnnotations: Iterable[TabAnnotation], fillet: KiLength = 0) -> \
-                Tuple[List[Polygon], List[LineString]]:
+
+def buildTabs(
+    panel: "Panel",
+    substrate: Substrate,
+    partitionLines: Union[GeometryCollection, LineString],
+    tabAnnotations: Iterable[TabAnnotation],
+    fillet: KiLength = 0,
+) -> Tuple[List[Polygon], List[LineString]]:
     """
     Given substrate, partitionLines of the substrate and an iterable of tab
     annotations, build tabs. Note that if the tab does not hit the partition
@@ -464,17 +564,29 @@ def buildTabs(panel: "Panel", substrate: Substrate,
     tabs, cuts = [], []
     for annotation in tabAnnotations:
         try:
-            t, c = substrate.tab(annotation.origin, annotation.direction,
-                annotation.width, partitionLines, annotation.maxLength, fillet)
+            t, c = substrate.tab(
+                annotation.origin,
+                annotation.direction,
+                annotation.width,
+                partitionLines,
+                annotation.maxLength,
+                fillet,
+            )
             if t is not None:
                 tabs.append(t)
                 cuts.append(c)
         except TabError as e:
             panel._renderLines(
-                [constructArrow(annotation.origin, annotation.direction, fromMm(3), fromMm(1))],
-                Layer.Margin)
+                [
+                    constructArrow(
+                        annotation.origin, annotation.direction, fromMm(3), fromMm(1)
+                    )
+                ],
+                Layer.Margin,
+            )
             panel.reportError(toKiCADPoint(e.origin), str(e))
     return tabs, cuts
+
 
 def addFrameFillets(frameGeometry, boardSubstrates, fillet, panel=None):
     """
@@ -501,13 +613,17 @@ def addFrameFillets(frameGeometry, boardSubstrates, fillet, panel=None):
             try:
                 reverseDir = (-annotation.direction[0], -annotation.direction[1])
                 t, _ = frameSubstrate.tab(
-                    annotation.origin, reverseDir, annotation.width,
-                    partitionLine=None, fillet=fillet)
+                    annotation.origin,
+                    reverseDir,
+                    annotation.width,
+                    partitionLine=None,
+                    fillet=fillet,
+                )
                 if t is None:
                     continue
                 crossesOtherBoard = any(
-                    other is not s and
-                    t.intersection(other.substrates).area > SHP_EPSILON ** 2
+                    other is not s
+                    and t.intersection(other.substrates).area > SHP_EPSILON**2
                     for other in boardSubstrates
                 )
                 if not crossesOtherBoard:
@@ -522,6 +638,7 @@ def addFrameFillets(frameGeometry, boardSubstrates, fillet, panel=None):
         frameSubstrate.union(tabs)
     return frameSubstrate.substrates
 
+
 def normalizePartitionLineOrientation(line):
     """
     Given a LineString or MultiLineString, normalize orientation of the
@@ -529,15 +646,20 @@ def normalizePartitionLineOrientation(line):
     closed linerings, it has to be counter-clock-wise.
     """
     if isinstance(line, MultiLineString):
-        return MultiLineString([normalizePartitionLineOrientation(x) for x in line.geoms])
+        return MultiLineString(
+            [normalizePartitionLineOrientation(x) for x in line.geoms]
+        )
     if isinstance(line, GeometryCollection):
-        return GeometryCollection([normalizePartitionLineOrientation(l) for l in line.geoms])
+        return GeometryCollection(
+            [normalizePartitionLineOrientation(l) for l in line.geoms]
+        )
     if not isLinestringCyclic(line):
         return line
     r = LinearRing(line.coords)
     if not r.is_ccw:
         return line
     return LineString(list(r.coords)[::-1])
+
 
 def maxTabCount(edgeLen, width, minDistance):
     """
@@ -549,8 +671,10 @@ def maxTabCount(edgeLen, width, minDistance):
     c = 1 + (edgeLen - minDistance) // (minDistance + width)
     return max(0, int(c))
 
-def skipBackbones(backbones: List[LineString], skip: int, first: int,
-                  key: Callable[[LineString], int]) -> List[LineString]:
+
+def skipBackbones(
+    backbones: List[LineString], skip: int, first: int, key: Callable[[LineString], int]
+) -> List[LineString]:
     """
     Given a list of backbones, get only every (skip + 1) other one. Treats
     all backbones on a given coordinate as one.
@@ -560,6 +684,7 @@ def skipBackbones(backbones: List[LineString], skip: int, first: int,
     active = set(itertools.islice(candidates, first - 1, None, skip + 1))
     return [x for x in backbones if key(x) in active]
 
+
 def bakeTextVars(board: pcbnew.BOARD) -> None:
     """
     Given a board, expand text variables in all text items on the board.
@@ -568,6 +693,7 @@ def bakeTextVars(board: pcbnew.BOARD) -> None:
         if not isinstance(drawing, pcbnew.PCB_TEXT):
             continue
         drawing.SetText(drawing.GetShownText(True))
+
 
 @dataclass
 class VCutSettings:
@@ -610,13 +736,17 @@ class Panel:
 
         self.filename = panelFilename
         self.board = pcbnew.NewBoard(panelFilename)
-        self.sourcePaths = set() # A set of all board files that were appended to the panel
-        self.substrates = [] # Substrates of the individual boards; e.g. for masking
-        self.boardSubstrate = Substrate([]) # Keep substrate in internal representation,
-                                            # Draw it just before saving
+        self.sourcePaths = (
+            set()
+        )  # A set of all board files that were appended to the panel
+        self.substrates = []  # Substrates of the individual boards; e.g. for masking
+        self.boardSubstrate = Substrate(
+            []
+        )  # Keep substrate in internal representation,
+        # Draw it just before saving
         self.backboneLines = []
-        self.hVCuts = set() # Keep V-cuts as numbers and append them just before saving
-        self.vVCuts = set() # to make them truly span the whole panel
+        self.hVCuts = set()  # Keep V-cuts as numbers and append them just before saving
+        self.vVCuts = set()  # to make them truly span the whole panel
         self.vCutSettings = VCutSettings()
         self.copperLayerCount = None
         self.renderedMousebiteCounter = 0
@@ -669,8 +799,12 @@ class Panel:
         """
         return len(self.errors) > 0
 
-    def save(self, reconstructArcs: bool=False, refillAllZones: bool=False,
-             edgeWidth: KiLength=fromMm(0.1)):
+    def save(
+        self,
+        reconstructArcs: bool = False,
+        refillAllZones: bool = False,
+        edgeWidth: KiLength = fromMm(0.1),
+    ):
         """
         Saves the panel to a file and makes the requested changes to the prl and
         pro files.
@@ -754,21 +888,24 @@ class Panel:
         # API. Let's modify the project files directly. Note that this has to be
         # done after the board is saved
         self._adjustPageSize()
-        self.makeLayersVisible() # as they are not in KiCAD 6
+        self.makeLayersVisible()  # as they are not in KiCAD 6
         self.transferProjectSettings()
         self.writeCustomDrcRules()
-
 
     def _getRefillEdges(self, reconstructArcs: bool):
         """
         Builds a list of edges that represent boards outlines and panel
         surrounding as independent pieces of substrate
         """
-        boardsEdges = list(chain(*[sub.serialize(reconstructArcs) for sub in self.substrates]))
+        boardsEdges = list(
+            chain(*[sub.serialize(reconstructArcs) for sub in self.substrates])
+        )
 
         surrounding = self.boardSubstrate.substrates.simplify(fromMm(0.01)).difference(
-            shapely.ops.unary_union(list(
-                sub.substrates.buffer(fromMm(0.2)) for sub in self.substrates)).simplify(fromMm(0.01)))
+            shapely.ops.unary_union(
+                list(sub.substrates.buffer(fromMm(0.2)) for sub in self.substrates)
+            ).simplify(fromMm(0.01))
+        )
         surroundingSubstrate = Substrate([])
         surroundingSubstrate.union(surrounding)
         boardsEdges += surroundingSubstrate.serialize()
@@ -782,21 +919,21 @@ class Panel:
             p = self.filename
         else:
             p = path
-        return os.path.splitext(p)[0]+'.kicad_pro'
+        return os.path.splitext(p)[0] + ".kicad_pro"
 
     def getPrlFilepath(self, path=None):
         if path == None:
             p = self.filename
         else:
             p = path
-        return os.path.splitext(p)[0]+'.kicad_prl'
+        return os.path.splitext(p)[0] + ".kicad_prl"
 
     def getDruFilepath(self, path=None):
         if path == None:
             p = self.filename
         else:
             p = path
-        return os.path.splitext(p)[0]+'.kicad_dru'
+        return os.path.splitext(p)[0] + ".kicad_dru"
 
     def makeLayersVisible(self):
         """
@@ -831,16 +968,20 @@ class Panel:
         into the project file.
         """
         if len(self.sourcePaths) > 1:
-            raise RuntimeError("Merging of DRC rules of multiple boards is currently unsupported")
+            raise RuntimeError(
+                "Merging of DRC rules of multiple boards is currently unsupported"
+            )
         if self.variants:
             with open(self.getProFilepath(), encoding="utf-8") as f:
                 project = json.load(f)
-            project.setdefault("schematic", {})["variants"] = list(self.variants.values())
+            project.setdefault("schematic", {})["variants"] = list(
+                self.variants.values()
+            )
             with open(self.getProFilepath(), "w", encoding="utf-8") as f:
                 json.dump(project, f, indent=2)
 
         if len(self.sourcePaths) == 0:
-            return # Nothing to merge
+            return  # Nothing to merge
 
         sPath = list(self.sourcePaths)[0]
         try:
@@ -853,10 +994,15 @@ class Panel:
         try:
             with open(self.getProFilepath(), encoding="utf-8") as f:
                 currentPro = json.load(f, object_pairs_hook=OrderedDict)
-            currentPro["board"]["design_settings"] = sourcePro["board"]["design_settings"]
+            currentPro["board"]["design_settings"] = sourcePro["board"][
+                "design_settings"
+            ]
             currentPro["board"]["design_settings"]["drc_exclusions"] = [
-                serializeExclusion(e) for e in self.drcExclusions]
-            currentPro["board"]["design_settings"]["rule_severities"] = sourcePro["board"]["design_settings"]["rule_severities"]
+                serializeExclusion(e) for e in self.drcExclusions
+            ]
+            currentPro["board"]["design_settings"]["rule_severities"] = sourcePro[
+                "board"
+            ]["design_settings"]["rule_severities"]
             currentPro["text_variables"] = sourcePro.get("text_variables", {})
 
             netClasses = sourcePro["net_settings"]["classes"] + [
@@ -864,7 +1010,9 @@ class Panel:
             ]
             currentPro["net_settings"]["classes"] = netClassesDefaultFirst(netClasses)
             currentPro["net_settings"]["netclass_patterns"] = self.netCLassPatterns
-            currentPro["net_settings"]["netclass_assignments"] = self.netClassAssignments
+            currentPro["net_settings"][
+                "netclass_assignments"
+            ] = self.netClassAssignments
 
             with open(self.getProFilepath(), "w", encoding="utf-8") as f:
                 json.dump(currentPro, f, indent=2)
@@ -873,21 +1021,18 @@ class Panel:
             # without attached project
             pass
 
-    def _assignNetToClasses(self, nets: Iterable[str], patterns: List[Tuple[str, str]])\
-            -> Dict[str, Set[str]]:
+    def _assignNetToClasses(
+        self, nets: Iterable[str], patterns: List[Tuple[str, str]]
+    ) -> Dict[str, Set[str]]:
         def safeCompile(p):
             try:
                 return re.compile(p)
             except Exception:
                 return None
 
-        regexes = [
-            (netclass, safeCompile(pattern)) for netclass, pattern in patterns
-        ]
+        regexes = [(netclass, safeCompile(pattern)) for netclass, pattern in patterns]
 
-        assignment: Dict[str, Set[str]] = {
-            netclass: set() for netclass, _ in patterns
-        }
+        assignment: Dict[str, Set[str]] = {netclass: set() for netclass, _ in patterns}
 
         for net in nets:
             for netclass, pattern in patterns:
@@ -908,7 +1053,7 @@ class Panel:
         patterns instead. The code below tries to cover both cases in a
         non-conflicting way.
         """
-        proFilename = os.path.splitext(board.GetFileName())[0]+'.kicad_pro'
+        proFilename = os.path.splitext(board.GetFileName())[0] + ".kicad_pro"
         try:
             with open(proFilename, encoding="utf-8") as f:
                 project = json.load(f)
@@ -941,18 +1086,20 @@ class Panel:
             defaultNetClass.addNet(netRenamer(name))
 
         for net in defaultNetClass.nets:
-            self.netCLassPatterns.append({
-                "netclass": defaultNetClass.name,
-                "pattern": net
-            })
+            self.netCLassPatterns.append(
+                {"netclass": defaultNetClass.name, "pattern": net}
+            )
         for netclass, pattern in netClassPatterns:
-            self.netCLassPatterns.append({
-                "netclass": netRenamer(netclass),
-                "pattern": netRenamer(pattern)
-            })
+            self.netCLassPatterns.append(
+                {"netclass": netRenamer(netclass), "pattern": netRenamer(pattern)}
+            )
 
-        for net, netclasses in (project["net_settings"].get("netclass_assignments") or {}).items():
-            self.netClassAssignments[netRenamer(net)] = [netRenamer(nc) for nc in netclasses]
+        for net, netclasses in (
+            project["net_settings"].get("netclass_assignments") or {}
+        ).items():
+            self.netClassAssignments[netRenamer(net)] = [
+                netRenamer(nc) for nc in netclasses
+            ]
 
     def _inheriCustomDrcRules(self, board, netRenamer):
         """
@@ -964,7 +1111,7 @@ class Panel:
         - if the rule contains condition, we identify boolean operations equals
           and not equals for net names and net classes and rename the nets
         """
-        druFilename = os.path.splitext(board.GetFileName())[0]+'.kicad_dru'
+        druFilename = os.path.splitext(board.GetFileName())[0] + ".kicad_dru"
         try:
             if os.stat(druFilename).st_size == 0:
                 # If the source board doesn't contain DRU files, there's nothing to
@@ -980,7 +1127,9 @@ class Panel:
         # Beware: "A . HASnetCLASS ( 'foo' )" is a syntactically valid condition in DRU files.
         # Therefore, we must be as tolerant to spaces and case as the KiCad DRU parser,
         # so that we catch all rules that might be in use.
-        conditionRegex = re.compile(r"([AB]\s*\.\s*(?i:(?:NetClass|NetName)\s*[=!]=|(?:hasNetclass|hasExactNetclass|inDiffPair)\s*\()\s*)'(.*?)'")
+        conditionRegex = re.compile(
+            r"([AB]\s*\.\s*(?i:(?:NetClass|NetName)\s*[=!]=|(?:hasNetclass|hasExactNetclass|inDiffPair)\s*\()\s*)'(.*?)'"
+        )
 
         for rule in rules:
             if isElement("version")(rule):
@@ -992,7 +1141,9 @@ class Panel:
                     if isElement("condition")(clause):
                         # Rename net classes and names in the condition
                         clause.items[1].value = conditionRegex.sub(
-                            lambda m: f"{m.group(1)}'{netRenamer(m.group(2))}'", clause.items[1].value)
+                            lambda m: f"{m.group(1)}'{netRenamer(m.group(2))}'",
+                            clause.items[1].value,
+                        )
                 self.customDRCRules.append(rule)
             else:
                 raise RuntimeError(f"Unkwnown custom DRC rule {rule}")
@@ -1006,23 +1157,24 @@ class Panel:
         if self.pageSize is None:
             return
         with open(self.filename, "r", encoding="utf-8") as f:
-            tree = parseSexprF(f, limit=10) # Introduce limit to speed up parsing
+            tree = parseSexprF(f, limit=10)  # Introduce limit to speed up parsing
         # Find paper property
         paperExpr = None
         for subExpr in tree:
             if not isinstance(subExpr, SExpr):
                 continue
-            if len(subExpr) > 0 and isinstance(subExpr[0], Atom) and subExpr[0].value == "paper":
+            if (
+                len(subExpr) > 0
+                and isinstance(subExpr[0], Atom)
+                and subExpr[0].value == "paper"
+            ):
                 paperExpr = subExpr
                 break
         assert paperExpr is not None
 
         if isinstance(self.pageSize, str):
             paperProps = self.pageSize.split("-")
-            paperExpr.items = [
-                Atom("paper"),
-                Atom(paperProps[0], " ", quoted=True)
-            ]
+            paperExpr.items = [Atom("paper"), Atom(paperProps[0], " ", quoted=True)]
             if len(paperProps) > 1:
                 paperExpr.items.append(Atom("portrait", " "))
         else:
@@ -1036,7 +1188,6 @@ class Panel:
 
         with open(self.filename, "w", encoding="utf-8") as f:
             f.write(str(tree))
-
 
     def inheritDesignSettings(self, board):
         """
@@ -1075,10 +1226,10 @@ class Panel:
         # we have to read out the page size from the source board and save it so
         # we can recover it.
         with open(board.GetFileName(), "r", encoding="utf-8") as f:
-            tree = parseSexprF(f, limit=10) # Introduce limit to speed up parsing
+            tree = parseSexprF(f, limit=10)  # Introduce limit to speed up parsing
         self._inheritedPageDimensions = getPageDimensionsFromAst(tree)
 
-    def setPageSize(self, size: Union[str, Tuple[int, int]] ) -> None:
+    def setPageSize(self, size: Union[str, Tuple[int, int]]) -> None:
         """
         Set page size - either a string name (e.g., A4) or size in KiCAD units
         """
@@ -1102,7 +1253,9 @@ class Panel:
                 return pageSize[1], pageSize[0]
             else:
                 return PAPER_DIMENSIONS[self.pageSize]
-        raise RuntimeError("Unknown page dimension - this is probably a bug and you should report it.")
+        raise RuntimeError(
+            "Unknown page dimension - this is probably a bug and you should report it."
+        )
 
     def setProperties(self, properties):
         """
@@ -1124,16 +1277,23 @@ class Panel:
         """
         self.board.SetTitleBlock(titleBlock)
 
-    def appendBoard(self, filename: Union[str, Path], destination: VECTOR2I,
-                    sourceArea: Optional[BOX2I] = None,
-                    origin: Origin = Origin.Center,
-                    rotationAngle: KiAngle = fromDegrees(0),
-                    shrink: bool = False, tolerance: KiLength = 0,
-                    bufferOutline: KiLength = fromMm(0.001),
-                    netRenamer: Optional[Callable[[int, str], str]] = None,
-                    refRenamer: Optional[Callable[[int, str], str]] = None,
-                    inheritDrc: bool = True, interpretAnnotations: bool=True,
-                    bakeText: bool = False, bakeRef: bool = False):
+    def appendBoard(
+        self,
+        filename: Union[str, Path],
+        destination: VECTOR2I,
+        sourceArea: Optional[BOX2I] = None,
+        origin: Origin = Origin.Center,
+        rotationAngle: KiAngle = fromDegrees(0),
+        shrink: bool = False,
+        tolerance: KiLength = 0,
+        bufferOutline: KiLength = fromMm(0.001),
+        netRenamer: Optional[Callable[[int, str], str]] = None,
+        refRenamer: Optional[Callable[[int, str], str]] = None,
+        inheritDrc: bool = True,
+        interpretAnnotations: bool = True,
+        bakeText: bool = False,
+        bakeRef: bool = False,
+    ):
         """
         Appends a board to the panel.
 
@@ -1167,14 +1327,18 @@ class Panel:
         # as EDA_ANGLE. However, there might be old scripts that will pass a
         # number.
         if not isinstance(rotationAngle, EDA_ANGLE):
-            raise RuntimeError("Board rotation has to be passed as EDA_ANGLE, not a number")
-
+            raise RuntimeError(
+                "Board rotation has to be passed as EDA_ANGLE, not a number"
+            )
 
         board = LoadBoard(str(filename))
         sourceVariants = [
             {"name": name, "description": board.GetVariantDescription(name)}
-            for name in (board.GetVariantNamesForUI()[1:]
-                         if hasattr(board, "GetVariantNamesForUI") else [])
+            for name in (
+                board.GetVariantNamesForUI()[1:]
+                if hasattr(board, "GetVariantNamesForUI")
+                else []
+            )
         ]
         sourceProject = self.getProFilepath(str(filename))
         if os.path.exists(sourceProject):
@@ -1200,9 +1364,11 @@ class Panel:
         else:
             panelThickness = self.board.GetDesignSettings().GetBoardThickness()
             if panelThickness != thickness:
-                raise PanelError(f"Cannot append board {filename} as its " \
-                                 f"thickness ({toMm(thickness)} mm) differs from " \
-                                 f"thickness of the panel ({toMm(panelThickness)}) mm")
+                raise PanelError(
+                    f"Cannot append board {filename} as its "
+                    f"thickness ({toMm(thickness)} mm) differs from "
+                    f"thickness of the panel ({toMm(panelThickness)}) mm"
+                )
         self.inheritCopperLayers(board)
         self.inheritEnabledLayers(board)
 
@@ -1211,12 +1377,13 @@ class Panel:
         elif shrink:
             sourceArea = findBoardBoundingBox(board, sourceArea)
         edgeMaxWidth = max(
-            (e.GetWidth() for e in collectEdges(board, Layer.Edge_Cuts)),
-            default=0)
+            (e.GetWidth() for e in collectEdges(board, Layer.Edge_Cuts)), default=0
+        )
         enlargedSourceArea = expandRect(sourceArea, tolerance + edgeMaxWidth)
         originPoint = getOriginCoord(origin, sourceArea)
-        translation = VECTOR2I(destination[0] - originPoint[0],
-                              destination[1] - originPoint[1])
+        translation = VECTOR2I(
+            destination[0] - originPoint[0], destination[1] - originPoint[1]
+        )
 
         if netRenamer is None:
             netRenamer = lambda x, y: self._uniquePrefix() + y
@@ -1235,7 +1402,8 @@ class Panel:
         tracks = collectItems(board.GetTracks(), enlargedSourceArea)
         zones = collectZones(board.Zones(), enlargedSourceArea)
 
-        itemMapping: Dict[str, str] = {} # string KIID to string KIID
+        itemMapping: Dict[str, str] = {}  # string KIID to string KIID
+
         def yieldMapping(old: str, new: str) -> None:
             nonlocal itemMapping
             itemMapping[old] = new
@@ -1247,12 +1415,18 @@ class Panel:
             # even if that text has "keep upright" attribute set. For that,
             # the attribute must be first removed without changing the
             # orientation of the text.
-            for item in (*footprint.GraphicalItems(), footprint.Value(), footprint.Reference()):
+            for item in (
+                *footprint.GraphicalItems(),
+                footprint.Value(),
+                footprint.Reference(),
+            ):
                 if isinstance(item, pcbnew.PCB_FIELD) and item.IsKeepUpright():
                     actualOrientation = item.GetDrawRotation()
                     item.SetKeepUpright(False)
                     alteredOrientation = item.GetDrawRotation()
-                    item.SetTextAngle(item.GetTextAngle() + (alteredOrientation - actualOrientation))
+                    item.SetTextAngle(
+                        item.GetTextAngle() + (alteredOrientation - actualOrientation)
+                    )
             footprint.Rotate(originPoint, rotationAngle)
             footprint.Move(translation)
             edges += removeCutsFromFootprint(footprint)
@@ -1277,12 +1451,14 @@ class Panel:
         def makeRevertTransformation(angle, origin, translation):
             def f(point):
                 return undoTransformation(point, angle, origin, translation)
+
             return f
 
-        revertTransformation = makeRevertTransformation(rotationAngle, originPoint, translation)
+        revertTransformation = makeRevertTransformation(
+            rotationAngle, originPoint, translation
+        )
         try:
-            s = Substrate(edges, 0,
-                revertTransformation=revertTransformation)
+            s = Substrate(edges, 0, revertTransformation=revertTransformation)
             self.boardSubstrate.union(s)
             self.substrates.append(s)
             self.substrates[-1].annotations = annotations
@@ -1301,18 +1477,23 @@ class Panel:
             exclusions = readBoardDrcExclusions(board)
             for drcE in exclusions:
                 try:
-                    newObjects = [resolveItem(self.board, pcbnew.KIID(itemMapping[x.m_Uuid.AsString()])) for x in drcE.objects]
+                    newObjects = [
+                        resolveItem(
+                            self.board, pcbnew.KIID(itemMapping[x.m_Uuid.AsString()])
+                        )
+                        for x in drcE.objects
+                    ]
                     assert all(x is not None for x in newObjects)
-                    newPosition = doTransformation(drcE.position, rotationAngle, originPoint, translation)
-                    self.drcExclusions.append(DrcExclusion(
-                        drcE.type,
-                        newPosition,
-                        newObjects
-                    ))
+                    newPosition = doTransformation(
+                        drcE.position, rotationAngle, originPoint, translation
+                    )
+                    self.drcExclusions.append(
+                        DrcExclusion(drcE.type, newPosition, newObjects)
+                    )
                 except KeyError as e:
-                    continue # We cannot handle DRC exclusions with board edges
+                    continue  # We cannot handle DRC exclusions with board edges
         except FileNotFoundError:
-            pass # Ignore boards without a project
+            pass  # Ignore boards without a project
 
         self.projectVars.append(self._readProjectVariables(board))
         boardBounds = findBoundingBox(edges)
@@ -1396,7 +1577,9 @@ class Panel:
         self._ensureLayerEnabled(self.vCutSettings.layer)
         label.SetLayer(self.vCutSettings.layer)
         label.SetTextThickness(self.vCutSettings.textThickness)
-        label.SetTextSize(toKiCADPoint((self.vCutSettings.textSize, self.vCutSettings.textSize)))
+        label.SetTextSize(
+            toKiCADPoint((self.vCutSettings.textSize, self.vCutSettings.textSize))
+        )
         label.SetHorizJustify(EDA_TEXT_HJUSTIFY_T.GR_TEXT_HJUSTIFY_LEFT)
 
     def _validateVCuts(self, tolerance=fromMm(1)):
@@ -1407,12 +1590,14 @@ class Panel:
         if len(self.hVCuts) == 0 and len(self.vVCuts) == 0:
             return
 
-        collisionPolygons = shapely.ops.unary_union([x.substrates.buffer(-tolerance) for x in self.substrates])
+        collisionPolygons = shapely.ops.unary_union(
+            [x.substrates.buffer(-tolerance) for x in self.substrates]
+        )
         minx, miny, maxx, maxy = self.panelBBox()
 
-        lines = \
-            [LineString([(minx, y), (maxx, y)]) for y in self.hVCuts] + \
-            [LineString([(x, miny), (x, maxy)]) for x in self.vVCuts]
+        lines = [LineString([(minx, y), (maxx, y)]) for y in self.hVCuts] + [
+            LineString([(x, miny), (x, maxy)]) for x in self.vVCuts
+        ]
 
         error_message = "V-Cut cuts the original PCBs. You should:\n"
         error_message += "- either reconsider your tab placement,\n"
@@ -1426,9 +1611,12 @@ class Panel:
                 self.reportError(toKiCADPoint(annotationPos), error_message)
 
     def _renderVCutV(self):
-        """ return list of PCB_SHAPE V-Cuts """
+        """return list of PCB_SHAPE V-Cuts"""
         bBox = self.boardSubstrate.boundingBox()
-        minY, maxY = bBox.GetY() - self.vCutSettings.textProlongation, bBox.GetY() + bBox.GetHeight() + self.vCutSettings.endProlongation
+        minY, maxY = (
+            bBox.GetY() - self.vCutSettings.textProlongation,
+            bBox.GetY() + bBox.GetHeight() + self.vCutSettings.endProlongation,
+        )
         segments = []
         for cut in self.vVCuts:
             segment = pcbnew.PCB_SHAPE()
@@ -1442,7 +1630,8 @@ class Panel:
                     cut - self.vCutSettings.clearance / 2,
                     bBox.GetY(),
                     cut + self.vCutSettings.clearance / 2,
-                    bBox.GetY() + bBox.GetHeight())
+                    bBox.GetY() + bBox.GetHeight(),
+                )
             segments.append((segment, keepout))
 
             label = pcbnew.PCB_TEXT(segment)
@@ -1453,9 +1642,12 @@ class Panel:
         return segments
 
     def _renderVCutH(self):
-        """ return list of PCB_SHAPE V-Cuts """
+        """return list of PCB_SHAPE V-Cuts"""
         bBox = self.boardSubstrate.boundingBox()
-        minX, maxX = bBox.GetX() - self.vCutSettings.endProlongation, bBox.GetX() + bBox.GetWidth() + self.vCutSettings.textProlongation
+        minX, maxX = (
+            bBox.GetX() - self.vCutSettings.endProlongation,
+            bBox.GetX() + bBox.GetWidth() + self.vCutSettings.textProlongation,
+        )
         segments = []
         for cut in self.hVCuts:
             segment = pcbnew.PCB_SHAPE()
@@ -1469,9 +1661,9 @@ class Panel:
                     bBox.GetX(),
                     cut - self.vCutSettings.clearance / 2,
                     bBox.GetX() + bBox.GetWidth(),
-                    cut + self.vCutSettings.clearance / 2)
+                    cut + self.vCutSettings.clearance / 2,
+                )
             segments.append((segment, keepout))
-
 
             label = pcbnew.PCB_TEXT(segment)
             self._setVCutLabelStyle(label, self.getAuxiliaryOrigin()[1], cut)
@@ -1479,12 +1671,21 @@ class Panel:
             segments.append((label, None))
         return segments
 
-    def makeGrid(self, boardfile: str, sourceArea: BOX2I, rows: int, cols: int,
-                 destination: VECTOR2I, placer: GridPlacerBase,
-                 rotation: KiAngle=fromDegrees(0), netRenamePattern: str="Board_{n}-{orig}",
-                 refRenamePattern: str="Board_{n}-{orig}", tolerance: KiLength=0,
-                 bakeText: bool=False, bakeRef: bool=False) \
-                     -> List[Substrate]:
+    def makeGrid(
+        self,
+        boardfile: str,
+        sourceArea: BOX2I,
+        rows: int,
+        cols: int,
+        destination: VECTOR2I,
+        placer: GridPlacerBase,
+        rotation: KiAngle = fromDegrees(0),
+        netRenamePattern: str = "Board_{n}-{orig}",
+        refRenamePattern: str = "Board_{n}-{orig}",
+        tolerance: KiLength = 0,
+        bakeText: bool = False,
+        bakeRef: bool = False,
+    ) -> List[Substrate]:
         """
         Place the given board in a grid pattern with given spacing. The board
         position of the gride is guided via placer. The nets and references are
@@ -1542,7 +1743,9 @@ class Panel:
         tabs, frames, backbones, etc.
         """
         if not isinstance(rotation, EDA_ANGLE):
-            raise RuntimeError(f"Rotation values have to be passed as `EDA_ANGLE` not {type(rotation)}")
+            raise RuntimeError(
+                f"Rotation values have to be passed as `EDA_ANGLE` not {type(rotation)}"
+            )
         substrateCount = len(self.substrates)
         netRenamer = lambda x, y: netRenamePattern.format(n=x, orig=y)
         refRenamer = lambda x, y: refRenamePattern.format(n=x, orig=y)
@@ -1553,19 +1756,33 @@ class Panel:
             dest = destination + placer.position(i, j, topLeftSize)
             boardRotation = rotation + placer.rotation(i, j)
             boardSize = self.appendBoard(
-                boardfile, dest, sourceArea=sourceArea,
-                tolerance=tolerance, origin=Origin.Center,
-                rotationAngle=boardRotation, netRenamer=netRenamer,
-                refRenamer=refRenamer, bakeText=bakeText, bakeRef=bakeRef)
+                boardfile,
+                dest,
+                sourceArea=sourceArea,
+                tolerance=tolerance,
+                origin=Origin.Center,
+                rotationAngle=boardRotation,
+                netRenamer=netRenamer,
+                refRenamer=refRenamer,
+                bakeText=bakeText,
+                bakeRef=bakeRef,
+            )
             if not topLeftSize:
                 topLeftSize = boardSize
 
         return self.substrates[substrateCount:]
 
-    def makeFrame(self, widthH: KiLength, widthV: KiLength, hspace: KiLength,
-                  vspace: KiLength, minWidth: KiLength = 0, minHeight: KiLength = 0,
-                  maxWidth: Optional[KiLength] = None, maxHeight: Optional[KiLength] = None) \
-                     -> Tuple[Iterable[LineString], Iterable[LineString]]:
+    def makeFrame(
+        self,
+        widthH: KiLength,
+        widthV: KiLength,
+        hspace: KiLength,
+        vspace: KiLength,
+        minWidth: KiLength = 0,
+        minHeight: KiLength = 0,
+        maxWidth: Optional[KiLength] = None,
+        maxHeight: Optional[KiLength] = None,
+    ) -> Tuple[Iterable[LineString], Iterable[LineString]]:
         """
         Build a frame around the boards. Specify width and spacing between the
         boards substrates and the frame. Return a tuple of vertical and
@@ -1596,12 +1813,19 @@ class Panel:
 
         sizeErrors = []
         if maxWidth is not None and frameOuterRect.GetWidth() > maxWidth:
-            sizeErrors.append(f"Panel width {frameOuterRect.GetWidth() / units.mm} mm exceeds the limit {maxWidth / units.mm} mm")
+            sizeErrors.append(
+                f"Panel width {frameOuterRect.GetWidth() / units.mm} mm exceeds the limit {maxWidth / units.mm} mm"
+            )
         if maxHeight is not None and frameOuterRect.GetHeight() > maxHeight:
-            sizeErrors.append(f"Panel height {frameOuterRect.GetHeight() / units.mm} mm exceeds the limit {maxHeight / units.mm} mm")
+            sizeErrors.append(
+                f"Panel height {frameOuterRect.GetHeight() / units.mm} mm exceeds the limit {maxHeight / units.mm} mm"
+            )
         if len(sizeErrors) > 0:
-            self.reportError(toKiCADPoint(frameOuterRect.GetEnd()),
-                             "Panel doesn't meet size constraints:\n" + "\n".join(f"- {x}" for x in sizeErrors))
+            self.reportError(
+                toKiCADPoint(frameOuterRect.GetEnd()),
+                "Panel doesn't meet size constraints:\n"
+                + "\n".join(f"- {x}" for x in sizeErrors),
+            )
 
         if frameOuterRect.GetWidth() < minWidth:
             diff = minWidth - frameOuterRect.GetWidth()
@@ -1623,10 +1847,18 @@ class Panel:
         frameCutsH = self.makeFrameCutsH(innerArea, frameInnerRect, frameOuterRect)
         return frameCutsV, frameCutsH
 
-    def makeTightFrame(self, widthH: KiLength, widthV: KiLength, slotwidth: KiLength,
-                      hspace: KiLength, vspace: KiLength,  minWidth: KiLength=0,
-                      minHeight: KiLength=0, maxWidth: Optional[KiLength] = None,
-                      maxHeight: Optional[KiLength] = None) -> None:
+    def makeTightFrame(
+        self,
+        widthH: KiLength,
+        widthV: KiLength,
+        slotwidth: KiLength,
+        hspace: KiLength,
+        vspace: KiLength,
+        minWidth: KiLength = 0,
+        minHeight: KiLength = 0,
+        maxWidth: Optional[KiLength] = None,
+        maxHeight: Optional[KiLength] = None,
+    ) -> None:
         """
         Build a full frame with board perimeter milled out. Add your boards to
         the panel first using appendBoard or makeGrid.
@@ -1650,7 +1882,9 @@ class Panel:
 
         maxHeight - if the panel doesn't meet this height, error is set
         """
-        self.makeFrame(widthH, widthV, hspace, vspace, minWidth, minHeight, maxWidth, maxHeight)
+        self.makeFrame(
+            widthH, widthV, hspace, vspace, minWidth, minHeight, maxWidth, maxHeight
+        )
         boardSlot = GeometryCollection()
         for s in self.substrates:
             boardSlot = boardSlot.union(s.exterior())
@@ -1658,9 +1892,13 @@ class Panel:
         frameBody = box(*self.boardSubstrate.bounds()).difference(boardSlot)
         self.appendSubstrate(frameBody)
 
-    def makeRailsTb(self, thickness: KiLength, minHeight: KiLength = 0,
-                    maxHeight: Optional[KiLength] = None,
-                    vspace: Optional[KiLength] = None) -> None:
+    def makeRailsTb(
+        self,
+        thickness: KiLength,
+        minHeight: KiLength = 0,
+        maxHeight: Optional[KiLength] = None,
+        vspace: Optional[KiLength] = None,
+    ) -> None:
         """
         Adds a rail to top and bottom. You can specify minimal height the panel
         has to feature. You can also specify maximal height of the panel. If the
@@ -1674,7 +1912,10 @@ class Panel:
             minx, miny, maxx, maxy = self.boardsBBox()
             height = maxy - miny + 2 * (thickness + vspace)
             if maxHeight is not None and height > maxHeight:
-                self.reportError(toKiCADPoint((maxx, maxy)), f"Panel height {height / units.mm} mm exceeds the limit {maxHeight / units.mm} mm")
+                self.reportError(
+                    toKiCADPoint((maxx, maxy)),
+                    f"Panel height {height / units.mm} mm exceeds the limit {maxHeight / units.mm} mm",
+                )
             if height < minHeight:
                 thickness = (minHeight - maxy + miny) // 2 - vspace
             topRail = box(minx, maxy + vspace, maxx, maxy + vspace + thickness)
@@ -1683,7 +1924,10 @@ class Panel:
             minx, miny, maxx, maxy = self.panelBBox()
             height = maxy - miny + 2 * thickness
             if maxHeight is not None and height > maxHeight:
-                self.reportError(toKiCADPoint((maxx, maxy)), f"Panel height {height / units.mm} mm exceeds the limit {maxHeight / units.mm} mm")
+                self.reportError(
+                    toKiCADPoint((maxx, maxy)),
+                    f"Panel height {height / units.mm} mm exceeds the limit {maxHeight / units.mm} mm",
+                )
             if height < minHeight:
                 thickness = (minHeight - maxy + miny) // 2
             topRail = box(minx, maxy, maxx, maxy + thickness)
@@ -1691,9 +1935,13 @@ class Panel:
         self.appendSubstrate(topRail)
         self.appendSubstrate(bottomRail)
 
-    def makeRailsLr(self, thickness: KiLength, minWidth: KiLength = 0,
-                    maxWidth: Optional[KiLength] = None,
-                    hspace: Optional[KiLength] = None) -> None:
+    def makeRailsLr(
+        self,
+        thickness: KiLength,
+        minWidth: KiLength = 0,
+        maxWidth: Optional[KiLength] = None,
+        hspace: Optional[KiLength] = None,
+    ) -> None:
         """
         Adds a rail to left and right. You can specify minimal width the panel
         has to feature.
@@ -1706,7 +1954,10 @@ class Panel:
             minx, miny, maxx, maxy = self.boardsBBox()
             width = maxx - minx + 2 * (thickness + hspace)
             if maxWidth is not None and width > maxWidth:
-                self.reportError(toKiCADPoint((maxx, maxy)), f"Panel width {width / units.mm} mm exceeds the limit {maxWidth / units.mm} mm")
+                self.reportError(
+                    toKiCADPoint((maxx, maxy)),
+                    f"Panel width {width / units.mm} mm exceeds the limit {maxWidth / units.mm} mm",
+                )
             if width < minWidth:
                 thickness = (minWidth - maxx + minx) // 2 - hspace
             leftRail = box(minx - hspace - thickness, miny, minx - hspace, maxy)
@@ -1715,7 +1966,10 @@ class Panel:
             minx, miny, maxx, maxy = self.panelBBox()
             width = maxx - minx + 2 * thickness
             if maxWidth is not None and width > maxWidth:
-                self.reportError(toKiCADPoint((maxx, maxy)), f"Panel width {width / units.mm} mm exceeds the limit {maxWidth / units.mm} mm")
+                self.reportError(
+                    toKiCADPoint((maxx, maxy)),
+                    f"Panel width {width / units.mm} mm exceeds the limit {maxWidth / units.mm} mm",
+                )
             if width < minWidth:
                 thickness = (minWidth - maxx + minx) // 2
             leftRail = box(minx - thickness, miny, minx, maxy)
@@ -1727,28 +1981,42 @@ class Panel:
         """
         Generate vertical cuts for the frame corners and return them
         """
-        x_coords = [ innerArea.GetX(),
-                     innerArea.GetX() + innerArea.GetWidth() ]
-        y_coords = sorted([ frameInnerArea.GetY(),
-                            frameInnerArea.GetY() + frameInnerArea.GetHeight(),
-                            outerArea.GetY(),
-                            outerArea.GetY() + outerArea.GetHeight() ])
-        cuts =  [ [(x_coord, y_coords[0]), (x_coord, y_coords[1])] for x_coord in x_coords ]
-        cuts += [ [(x_coord, y_coords[2]), (x_coord, y_coords[3])] for x_coord in x_coords ]
+        x_coords = [innerArea.GetX(), innerArea.GetX() + innerArea.GetWidth()]
+        y_coords = sorted(
+            [
+                frameInnerArea.GetY(),
+                frameInnerArea.GetY() + frameInnerArea.GetHeight(),
+                outerArea.GetY(),
+                outerArea.GetY() + outerArea.GetHeight(),
+            ]
+        )
+        cuts = [
+            [(x_coord, y_coords[0]), (x_coord, y_coords[1])] for x_coord in x_coords
+        ]
+        cuts += [
+            [(x_coord, y_coords[2]), (x_coord, y_coords[3])] for x_coord in x_coords
+        ]
         return map(LineString, cuts)
 
     def makeFrameCutsH(self, innerArea, frameInnerArea, outerArea):
         """
         Generate horizontal cuts for the frame corners and return them
         """
-        y_coords = [ innerArea.GetY(),
-                     innerArea.GetY() + innerArea.GetHeight() ]
-        x_coords = sorted([ frameInnerArea.GetX(),
-                            frameInnerArea.GetX() + frameInnerArea.GetWidth(),
-                            outerArea.GetX(),
-                            outerArea.GetX() + outerArea.GetWidth() ])
-        cuts =  [ [(x_coords[0], y_coord), (x_coords[1], y_coord)] for y_coord in y_coords ]
-        cuts += [ [(x_coords[2], y_coord), (x_coords[3], y_coord)] for y_coord in y_coords ]
+        y_coords = [innerArea.GetY(), innerArea.GetY() + innerArea.GetHeight()]
+        x_coords = sorted(
+            [
+                frameInnerArea.GetX(),
+                frameInnerArea.GetX() + frameInnerArea.GetWidth(),
+                outerArea.GetX(),
+                outerArea.GetX() + outerArea.GetWidth(),
+            ]
+        )
+        cuts = [
+            [(x_coords[0], y_coord), (x_coords[1], y_coord)] for y_coord in y_coords
+        ]
+        cuts += [
+            [(x_coords[2], y_coord), (x_coords[3], y_coord)] for y_coord in y_coords
+        ]
         return map(LineString, cuts)
 
     def makeVCuts(self, cuts, boundCurves=False, offset=fromMm(0)):
@@ -1772,23 +2040,32 @@ class Panel:
                 continue
             start = roundPoint(cut.coords[0])
             end = roundPoint(cut.coords[-1])
-            if start.x == end.x or (abs(start.x - end.x) <= fromMm(0.5) and boundCurves):
+            if start.x == end.x or (
+                abs(start.x - end.x) <= fromMm(0.5) and boundCurves
+            ):
                 self.addVCutV((start.x + end.x) / 2)
-            elif start.y == end.y or (abs(start.y - end.y) <= fromMm(0.5) and boundCurves):
+            elif start.y == end.y or (
+                abs(start.y - end.y) <= fromMm(0.5) and boundCurves
+            ):
                 self.addVCutH((start.y + end.y) / 2)
             else:
                 description = f"[{toMm(start.x)}, {toMm(start.y)}] -> [{toMm(end.x)}, {toMm(end.y)}]"
                 message = f"Cannot perform V-Cut which is not horizontal or vertical ({description}).\n"
                 message += "Possible cause might be:\n"
-                message += "- check that intended edges are truly horizonal or vertical\n"
+                message += (
+                    "- check that intended edges are truly horizonal or vertical\n"
+                )
                 message += "- check your tab placement if it as expected\n"
-                message += "You can use layer style of cuts to see them and validate them."
+                message += (
+                    "You can use layer style of cuts to see them and validate them."
+                )
                 self._renderLines([cut], Layer.Margin)
                 self.reportError(toKiCADPoint(cut.coords[0]), message)
                 continue
 
-    def makeMouseBites(self, cuts, diameter, spacing, offset=fromMm(0.25),
-        prolongation=fromMm(0.5)):
+    def makeMouseBites(
+        self, cuts, diameter, spacing, offset=fromMm(0.25), prolongation=fromMm(0.5)
+    ):
         """
         Take a list of cuts and perform mouse bites. The cuts can be prolonged
         to
@@ -1796,12 +2073,14 @@ class Panel:
         bloatedSubstrate = prep(self.boardSubstrate.substrates.buffer(SHP_EPSILON))
         offsetCuts = []
         for cut in cuts:
-            cut = cut.simplify(SHP_EPSILON) # Remove self-intersecting geometry
+            cut = cut.simplify(SHP_EPSILON)  # Remove self-intersecting geometry
             cut = prolongCut(cut, prolongation)
             offsetCut = cut.parallel_offset(offset, "left")
             offsetCuts.append(offsetCut)
 
-        for cut in listGeometries(shapely.ops.unary_union(offsetCuts).simplify(SHP_EPSILON)):
+        for cut in listGeometries(
+            shapely.ops.unary_union(offsetCuts).simplify(SHP_EPSILON)
+        ):
             self.renderedMousebiteCounter += 1
             length = cut.length
             count = int(length / spacing) + 1
@@ -1809,13 +2088,18 @@ class Panel:
                 if count == 1:
                     hole = cut.interpolate(0.5, normalized=True)
                 else:
-                    hole = cut.interpolate( i * length / (count - 1) )
+                    hole = cut.interpolate(i * length / (count - 1))
                 if bloatedSubstrate.intersects(hole):
-                    self.addNPTHole(toKiCADPoint((hole.x, hole.y)), diameter,
-                                    ref=f"KiKit_MB_{self.renderedMousebiteCounter}_{i+1}",
-                                    excludedFromPos=True)
+                    self.addNPTHole(
+                        toKiCADPoint((hole.x, hole.y)),
+                        diameter,
+                        ref=f"KiKit_MB_{self.renderedMousebiteCounter}_{i+1}",
+                        excludedFromPos=True,
+                    )
 
-    def makeCutsToLayer(self, cuts, layer=Layer.Cmts_User, prolongation=fromMm(0), width=fromMm(0.3)):
+    def makeCutsToLayer(
+        self, cuts, layer=Layer.Cmts_User, prolongation=fromMm(0), width=fromMm(0.3)
+    ):
         """
         Take a list of cuts and render them as lines on given layer. The cuts
         can be prolonged just like with mousebites.
@@ -1835,10 +2119,14 @@ class Panel:
                 segment.SetWidth(width)
                 self.board.Add(segment)
 
-    def addNPTHole(self, position: VECTOR2I, diameter: KiLength,
-                   paste: bool=False, ref: Optional[str]=None,
-                   excludedFromPos: bool=False,
-                   solderMaskMargin: Optional[KiLength] = None,
+    def addNPTHole(
+        self,
+        position: VECTOR2I,
+        diameter: KiLength,
+        paste: bool = False,
+        ref: Optional[str] = None,
+        excludedFromPos: bool = False,
+        solderMaskMargin: Optional[KiLength] = None,
     ) -> None:
         """
         Add a drilled non-plated hole to the position (`VECTOR2I`) with given
@@ -1858,7 +2146,9 @@ class Panel:
                 pad.SetLayerSet(layerSet)
         if ref is not None:
             footprint.SetReference(ref)
-        if hasattr(footprint, "SetExcludedFromPosFiles"): # KiCAD 6 doesn't support this attribute
+        if hasattr(
+            footprint, "SetExcludedFromPosFiles"
+        ):  # KiCAD 6 doesn't support this attribute
             footprint.SetExcludedFromPosFiles(excludedFromPos)
         if hasattr(footprint, "SetExcludedFromBOM"):
             footprint.SetExcludedFromBOM(True)
@@ -1866,9 +2156,15 @@ class Panel:
             footprint.SetBoardOnly(True)
         self.board.Add(footprint)
 
-    def addFiducial(self, position: VECTOR2I, copperDiameter: KiLength,
-                    openingDiameter: KiLength, bottom: bool = False,
-                    paste: bool = False, ref: Optional[str] = None) -> None:
+    def addFiducial(
+        self,
+        position: VECTOR2I,
+        copperDiameter: KiLength,
+        openingDiameter: KiLength,
+        bottom: bool = False,
+        paste: bool = False,
+        ref: Optional[str] = None,
+    ) -> None:
         """
         Add fiducial, i.e round copper pad with solder mask opening to the
         position (`VECTOR2I`), with given copperDiameter and openingDiameter. By
@@ -1909,7 +2205,6 @@ class Panel:
         if bottom:
             footprint.Flip(position, False)
 
-
     def panelCorners(self, horizontalOffset=0, verticalOffset=0):
         """
         Return the list of top-left, top-right, bottom-left and bottom-right
@@ -1922,9 +2217,15 @@ class Panel:
         bottomRight = toKiCADPoint((maxx - horizontalOffset, maxy - verticalOffset))
         return [topLeft, topRight, bottomLeft, bottomRight]
 
-    def addCornerFiducials(self, fidCount: int, horizontalOffset: KiLength,
-                           verticalOffset: KiLength, copperDiameter: KiLength,
-                           openingDiameter: KiLength, paste: bool = False) -> None:
+    def addCornerFiducials(
+        self,
+        fidCount: int,
+        horizontalOffset: KiLength,
+        verticalOffset: KiLength,
+        copperDiameter: KiLength,
+        openingDiameter: KiLength,
+        paste: bool = False,
+    ) -> None:
         """
         Add up to 4 fiducials to the top-left, top-right, bottom-left and
         bottom-right corner of the board (in this order). This function expects
@@ -1932,14 +2233,35 @@ class Panel:
 
         The offsets are measured from the outer edges of the substrate.
         """
-        for i, pos in enumerate(self.panelCorners(horizontalOffset, verticalOffset)[:fidCount]):
-            self.addFiducial(pos, copperDiameter, openingDiameter, False,
-                             paste, ref = f"KiKit_FID_T_{i+1}")
-            self.addFiducial(pos, copperDiameter, openingDiameter, True,
-                             paste, ref = f"KiKit_FID_B_{i+1}")
+        for i, pos in enumerate(
+            self.panelCorners(horizontalOffset, verticalOffset)[:fidCount]
+        ):
+            self.addFiducial(
+                pos,
+                copperDiameter,
+                openingDiameter,
+                False,
+                paste,
+                ref=f"KiKit_FID_T_{i+1}",
+            )
+            self.addFiducial(
+                pos,
+                copperDiameter,
+                openingDiameter,
+                True,
+                paste,
+                ref=f"KiKit_FID_B_{i+1}",
+            )
 
-    def addCornerTooling(self, holeCount, horizontalOffset, verticalOffset,
-                         diameter, paste=False, solderMaskMargin: Optional[KiLength]=None):
+    def addCornerTooling(
+        self,
+        holeCount,
+        horizontalOffset,
+        verticalOffset,
+        diameter,
+        paste=False,
+        solderMaskMargin: Optional[KiLength] = None,
+    ):
         """
         Add up to 4 tooling holes to the top-left, top-right, bottom-left and
         bottom-right corner of the board (in this order). This function expects
@@ -1949,9 +2271,17 @@ class Panel:
 
         Optionally, a solder mask margin (diameter) can also be specified.
         """
-        for i, pos in enumerate(self.panelCorners(horizontalOffset, verticalOffset)[:holeCount]):
-            self.addNPTHole(pos, diameter, paste, ref=f"KiKit_TO_{i+1}", excludedFromPos=False,
-                            solderMaskMargin=solderMaskMargin)
+        for i, pos in enumerate(
+            self.panelCorners(horizontalOffset, verticalOffset)[:holeCount]
+        ):
+            self.addNPTHole(
+                pos,
+                diameter,
+                paste,
+                ref=f"KiKit_TO_{i+1}",
+                excludedFromPos=False,
+                solderMaskMargin=solderMaskMargin,
+            )
 
     def addMillFillets(self, millRadius):
         """
@@ -1979,7 +2309,8 @@ class Panel:
         """
         for s in self.substrates:
             s.annotations = list(
-                filter(lambda x: not isinstance(x, TabAnnotation), s.annotations))
+                filter(lambda x: not isinstance(x, TabAnnotation), s.annotations)
+            )
 
     def buildTabsFromAnnotations(self, fillet: KiLength) -> List[LineString]:
         """
@@ -2004,9 +2335,12 @@ class Panel:
         """
         pos = lambda offset: (
             abs(dir[0]) * edge.x + abs(dir[1]) * (edge.min + offset),
-            abs(dir[1]) * edge.x + abs(dir[0]) * (edge.min + offset))
-        return [TabAnnotation(None, pos(offset), dir, width)
-            for offset in tabSpacing(edge.length, count)]
+            abs(dir[1]) * edge.x + abs(dir[0]) * (edge.min + offset),
+        )
+        return [
+            TabAnnotation(None, pos(offset), dir, width)
+            for offset in tabSpacing(edge.length, count)
+        ]
 
     def _buildTabAnnotations(self, countFn, widthFn, ghostSubstrates):
         """
@@ -2022,9 +2356,9 @@ class Panel:
         S = substrate.SubstrateNeighbors
         sides = [
             (S.leftC, shpBBoxLeft, [1, 0]),
-            (S.rightC, shpBBoxRight,[-1, 0]),
+            (S.rightC, shpBBoxRight, [-1, 0]),
             (S.topC, shpBBoxTop, [0, 1]),
-            (S.bottomC, shpBBoxBottom,[0, -1])
+            (S.bottomC, shpBBoxBottom, [0, -1]),
         ]
         for i, s in enumerate(self.substrates):
             for query, side, dir in sides:
@@ -2037,8 +2371,9 @@ class Panel:
                         a = self._buildTabAnnotationForEdge(edge, dir, tCount, tWidth)
                         self.substrates[i].annotations.extend(a)
 
-    def buildTabAnnotationsFixed(self, hcount, vcount, hwidth, vwidth,
-            minDistance, ghostSubstrates):
+    def buildTabAnnotationsFixed(
+        self, hcount, vcount, hwidth, vwidth, minDistance, ghostSubstrates
+    ):
         """
         Add tab annotations for the individual substrates based on number of
         tabs in horizontal and vertical direction. You can specify individual
@@ -2049,14 +2384,16 @@ class Panel:
 
         You can also specify ghost substrates (for the future framing).
         """
+
         def widthFn(edgeLength, dir):
             return abs(dir[0]) * hwidth + abs(dir[1]) * vwidth
+
         def countFn(edgeLength, dir):
             countLimit = abs(dir[0]) * hcount + abs(dir[1]) * vcount
             width = widthFn(edgeLength, dir)
             return min(countLimit, maxTabCount(edgeLength, width, minDistance))
-        return self._buildTabAnnotations(countFn, widthFn, ghostSubstrates)
 
+        return self._buildTabAnnotations(countFn, widthFn, ghostSubstrates)
 
     def buildTabAnnotationsSpacing(self, spacing, hwidth, vwidth, ghostSubstrates):
         """
@@ -2064,10 +2401,13 @@ class Panel:
 
         You can also specify ghost substrates (for the future framing).
         """
+
         def widthFn(edgeLength, dir):
             return abs(dir[0]) * hwidth + abs(dir[1]) * vwidth
+
         def countFn(edgeLength, dir):
             return maxTabCount(edgeLength, widthFn(edgeLength, dir), spacing)
+
         return self._buildTabAnnotations(countFn, widthFn, ghostSubstrates)
 
     def buildTabAnnotationsCorners(self, width):
@@ -2084,9 +2424,14 @@ class Panel:
                 a = TabAnnotation(None, (x, y), dir, width)
                 self.substrates[i].annotations.append(a)
 
-    def _buildSingleFullTab(self, s: Substrate, a: KiPoint, b: KiPoint,
-                            cutoutDepth: KiLength, patchConrners: bool) \
-            -> Tuple[List[LineString], List[Polygon]]:
+    def _buildSingleFullTab(
+        self,
+        s: Substrate,
+        a: KiPoint,
+        b: KiPoint,
+        cutoutDepth: KiLength,
+        patchConrners: bool,
+    ) -> Tuple[List[LineString], List[Polygon]]:
         partitionFace = LineString([a, b])
 
         npa, npb = np.array(a), np.array(b)
@@ -2099,50 +2444,79 @@ class Panel:
         if np.dot(midpoint - npa, spanDirection) < 0:
             spanDirection = -spanDirection
 
-        spanDistance = max(partitionFace.distance(Point(*x)) for x in s.exteriorRing().coords)
+        spanDistance = max(
+            partitionFace.distance(Point(*x)) for x in s.exteriorRing().coords
+        )
 
         sideEdge = spanDirection * spanDistance
-        candidateBox = Polygon([npa - spanDirection, npb - spanDirection, npb + sideEdge, npa + sideEdge])
+        candidateBox = Polygon(
+            [npa - spanDirection, npb - spanDirection, npb + sideEdge, npa + sideEdge]
+        )
         faceCandidate = s.exterior().intersection(candidateBox)
 
         expectedDirection = np.around(normalize(npb - npa), 2)
-        faceSegments = [LineString(x) for x in linestringToSegments(faceCandidate.exterior)
+        faceSegments = [
+            LineString(x)
+            for x in linestringToSegments(faceCandidate.exterior)
             if np.array_equal(
                 np.around(normalize(np.array(x[0]) - np.array(x[1])), 2),
-                expectedDirection) or
-               np.array_equal(
+                expectedDirection,
+            )
+            or np.array_equal(
                 np.around(normalize(np.array(x[1]) - np.array(x[0])), 2),
-                expectedDirection)]
-        faceDistances = [(x, np.around(partitionFace.distance(x), 2)) for x in faceSegments]
+                expectedDirection,
+            )
+        ]
+        faceDistances = [
+            (x, np.around(partitionFace.distance(x), 2)) for x in faceSegments
+        ]
         minFaceDistance = min(faceDistances, key=lambda x: x[1])[1]
 
-        cutFaces = [x for x, d in faceDistances if abs(d - minFaceDistance) < SHP_EPSILON]
+        cutFaces = [
+            x for x, d in faceDistances if abs(d - minFaceDistance) < SHP_EPSILON
+        ]
         tabs, cuts = [], []
         for cutLine in listGeometries(shapely.ops.unary_union(cutFaces)):
-            if minFaceDistance > 0: # Do not generate degenerated polygons
-                polygon = Polygon(list(cutLine.coords) +
-                    [np.array(cutLine.coords[-1]) - minFaceDistance * spanDirection,
-                    np.array(cutLine.coords[0]) - minFaceDistance * spanDirection])
+            if minFaceDistance > 0:  # Do not generate degenerated polygons
+                polygon = Polygon(
+                    list(cutLine.coords)
+                    + [
+                        np.array(cutLine.coords[-1]) - minFaceDistance * spanDirection,
+                        np.array(cutLine.coords[0]) - minFaceDistance * spanDirection,
+                    ]
+                )
                 tabs.append(polygon)
             cuts.append(LineString(list(cutLine.coords)[::-1]))
 
         solidThickness = max(0, minFaceDistance - cutoutDepth)
         if solidThickness != 0:
-            tabs.append(Polygon([npa, npb,
-                                 npb + spanDirection * solidThickness,
-                                 npa + spanDirection * solidThickness]))
+            tabs.append(
+                Polygon(
+                    [
+                        npa,
+                        npb,
+                        npb + spanDirection * solidThickness,
+                        npa + spanDirection * solidThickness,
+                    ]
+                )
+            )
         if patchConrners:
             # Generate corner patches - we don't want cutouts on the board corners,
             # so we create a triangle that will patch it.
             for point in [npa, npb]:
-                corner = min(s.exteriorRing().coords, key=lambda x: Point(*x).distance(Point(*point)))
-                patch = Polygon([point, corner, corner - minFaceDistance * spanDirection])
+                corner = min(
+                    s.exteriorRing().coords,
+                    key=lambda x: Point(*x).distance(Point(*point)),
+                )
+                patch = Polygon(
+                    [point, corner, corner - minFaceDistance * spanDirection]
+                )
                 tabs.append(patch)
         return cuts, tabs
 
-
-    def buildFullTabs(self, cutoutDepth: KiLength, patchCorners: bool = True) \
-            -> List[shapely.geometry.LineString]:
+    def buildFullTabs(
+        self, cutoutDepth: KiLength, patchCorners: bool = True
+    ) -> List[shapely.geometry.LineString]:
         """
         Make full tabs. This strategy basically cuts the bounding boxes of the
         PCBs. Not suitable for mousebites or PCB that doesn't have a rectangular
@@ -2173,9 +2547,7 @@ class Panel:
         hull = self.boardSubstrate.substrates.convex_hull
         filler = hull.difference(self.boardSubstrate.substrates)
         boardInteriors = [
-            Polygon(ring)
-            for s in self.substrates
-            for ring in s.substrates.interiors
+            Polygon(ring) for s in self.substrates for ring in s.substrates.interiors
         ]
         if boardInteriors:
             filler = filler.difference(shapely.ops.unary_union(boardInteriors))
@@ -2218,8 +2590,10 @@ class Panel:
         if self.copperLayerCount is None:
             self.setCopperLayers(board.GetCopperLayerCount())
 
-        elif(self.copperLayerCount != board.GetCopperLayerCount()):
-            raise RuntimeError("Attempting to panelize boards together of mixed layer counts")
+        elif self.copperLayerCount != board.GetCopperLayerCount():
+            raise RuntimeError(
+                "Attempting to panelize boards together of mixed layer counts"
+            )
 
     def setCopperLayers(self, count):
         """
@@ -2228,10 +2602,15 @@ class Panel:
         self.copperLayerCount = count
         self.board.SetCopperLayerCount(self.copperLayerCount)
 
-    def copperFillNonBoardAreas(self, clearance: KiLength=fromMm(1),
-            layers: List[Layer]=[Layer.F_Cu,Layer.B_Cu], hatched: bool=False,
-            strokeWidth: KiLength=fromMm(1), strokeSpacing: KiLength=fromMm(1),
-            orientation: KiAngle=fromDegrees(45)) -> None:
+    def copperFillNonBoardAreas(
+        self,
+        clearance: KiLength = fromMm(1),
+        layers: List[Layer] = [Layer.F_Cu, Layer.B_Cu],
+        hatched: bool = False,
+        strokeWidth: KiLength = fromMm(1),
+        strokeSpacing: KiLength = fromMm(1),
+        orientation: KiAngle = fromDegrees(45),
+    ) -> None:
         """
         This function is deprecated, please, use panel features instead.
 
@@ -2244,7 +2623,10 @@ class Panel:
         """
         _, _, maxx, maxy = self.panelBBox()
         if not self.boardSubstrate.isSinglePiece():
-            self.reportError(toKiCADPoint((maxx, maxy)), "The substrate has to be a single piece to fill unused areas")
+            self.reportError(
+                toKiCADPoint((maxx, maxy)),
+                "The substrate has to be a single piece to fill unused areas",
+            )
         if len(layers) == 0:
             self.reportError(toKiCADPoint((maxx, maxy)), "No layers to add copper to")
         increaseZonePriorities(self.board)
@@ -2285,10 +2667,10 @@ class Panel:
         expandDist - the distance by which to expand the board outline in each direction to ensure elements that are outside the board are included
         """
         inputBoard = pcbnew.LoadBoard(inputFilename)
-        boardArea=findBoardBoundingBox(inputBoard)
+        boardArea = findBoardBoundingBox(inputBoard)
         if expandDist is None:
             return boardArea
-        sourceArea=expandRect(boardArea, expandDist)
+        sourceArea = expandRect(boardArea, expandDist)
 
     def addKeepout(self, area, noTracks=True, noVias=True, noCopper=True):
         """
@@ -2306,11 +2688,18 @@ class Panel:
         self.board.Add(zone)
         return zone
 
-    def addText(self, text, position, orientation=fromDegrees(0),
-                width=fromMm(1.5), height=fromMm(1.5), thickness=fromMm(0.3),
-                hJustify=EDA_TEXT_HJUSTIFY_T.GR_TEXT_HJUSTIFY_CENTER,
-                vJustify=EDA_TEXT_VJUSTIFY_T.GR_TEXT_VJUSTIFY_CENTER,
-                layer=Layer.F_SilkS):
+    def addText(
+        self,
+        text,
+        position,
+        orientation=fromDegrees(0),
+        width=fromMm(1.5),
+        height=fromMm(1.5),
+        thickness=fromMm(0.3),
+        hJustify=EDA_TEXT_HJUSTIFY_T.GR_TEXT_HJUSTIFY_CENTER,
+        vJustify=EDA_TEXT_VJUSTIFY_T.GR_TEXT_VJUSTIFY_CENTER,
+        layer=Layer.F_SilkS,
+    ):
         """
         Add text at given position to the panel. If appending to the bottom
         side, text is automatically mirrored.
@@ -2396,8 +2785,8 @@ class Panel:
         will be placed there.
         """
         partition = substrate.SubstratePartitionLines(
-            self.substrates, boundarySubstrates,
-            safeMargin, safeMargin)
+            self.substrates, boundarySubstrates, safeMargin, safeMargin
+        )
         self._buildPartitionLineFromBB(partition)
         self._buildBackboneLineFromBB(partition, boundarySubstrates)
 
@@ -2453,19 +2842,32 @@ class Panel:
         lines = [t.exterior for t in self.debugReverseTabs]
         self._renderLines(lines, Layer.Eco1_User, fromMm(0.3))
         for geom in self.debugRawFrame:
-            outlines = [geom.exterior] if hasattr(geom, 'exterior') else \
-                [g.exterior for g in listGeometries(geom)]
+            outlines = (
+                [geom.exterior]
+                if hasattr(geom, "exterior")
+                else [g.exterior for g in listGeometries(geom)]
+            )
             self._renderLines(outlines, Layer.Eco2_User, fromMm(0.3))
-            if hasattr(geom, 'interiors'):
+            if hasattr(geom, "interiors"):
                 self._renderLines(list(geom.interiors), Layer.Eco2_User, fromMm(0.3))
             else:
                 for g in listGeometries(geom):
-                    if hasattr(g, 'interiors'):
-                        self._renderLines(list(g.interiors), Layer.Eco2_User, fromMm(0.3))
+                    if hasattr(g, "interiors"):
+                        self._renderLines(
+                            list(g.interiors), Layer.Eco2_User, fromMm(0.3)
+                        )
 
-    def renderBackbone(self, vthickness: KiLength, hthickness: KiLength,
-            vcut: bool, hcut: bool, vskip: int=0, hskip: int=0,
-            vfirst: int=0, hfirst: int=0):
+    def renderBackbone(
+        self,
+        vthickness: KiLength,
+        hthickness: KiLength,
+        vcut: bool,
+        hcut: bool,
+        vskip: int = 0,
+        hskip: int = 0,
+        vfirst: int = 0,
+        hfirst: int = 0,
+    ):
         """
         Render horizontal and vertical backbone lines. If zero thickness is
         specified, no backbone is rendered.
@@ -2486,12 +2888,26 @@ class Panel:
         if hfirst == 0:
             hfirst = hskip + 1
 
-        hbones = [] if hthickness == 0 \
-                    else list(filter(lambda l: isHorizontal(l.coords[0], l.coords[1]), self.backboneLines))
+        hbones = (
+            []
+            if hthickness == 0
+            else list(
+                filter(
+                    lambda l: isHorizontal(l.coords[0], l.coords[1]), self.backboneLines
+                )
+            )
+        )
         activeHbones = skipBackbones(hbones, hskip, hfirst, lambda x: x.coords[0][1])
 
-        vbones = [] if vthickness == 0 \
-                    else list(filter(lambda l: isVertical(l.coords[0], l.coords[1]), self.backboneLines))
+        vbones = (
+            []
+            if vthickness == 0
+            else list(
+                filter(
+                    lambda l: isVertical(l.coords[0], l.coords[1]), self.backboneLines
+                )
+            )
+        )
         activeVbones = skipBackbones(vbones, vskip, vfirst, lambda x: x.coords[0][0])
 
         cutpoints = commonPoints(self.backboneLines)
@@ -2503,8 +2919,7 @@ class Panel:
 
             minX = min(start[0], end[0])
             maxX = max(start[0], end[0])
-            bb = box(minX, start[1] - hthickness // 2,
-                        maxX, start[1] + hthickness // 2)
+            bb = box(minX, start[1] - hthickness // 2, maxX, start[1] + hthickness // 2)
             pieces.append(bb)
             if not hcut:
                 continue
@@ -2520,9 +2935,12 @@ class Panel:
                 candidates.append(((end[0] - vthickness // 2, end[1]), 1))
 
             for x, c in candidates:
-                cut = LineString([
-                    (x[0], x[1] - c * hthickness // 2),
-                    (x[0], x[1] + c * hthickness // 2)])
+                cut = LineString(
+                    [
+                        (x[0], x[1] - c * hthickness // 2),
+                        (x[0], x[1] + c * hthickness // 2),
+                    ]
+                )
                 cuts.append(cut)
 
         for l in activeVbones:
@@ -2531,8 +2949,7 @@ class Panel:
 
             minY = min(start[1], end[1])
             maxY = max(start[1], end[1])
-            bb = box(start[0] - vthickness // 2, minY,
-                        start[0] + vthickness // 2, maxY)
+            bb = box(start[0] - vthickness // 2, minY, start[0] + vthickness // 2, maxY)
             pieces.append(bb)
             if not vcut:
                 continue
@@ -2548,9 +2965,12 @@ class Panel:
                 candidates.append(((end[0], end[1] - hthickness // 2), -1))
 
             for x, c in candidates:
-                cut = LineString([
-                    (x[0] - c * vthickness // 2, x[1]),
-                    (x[0] + c * vthickness // 2, x[1])])
+                cut = LineString(
+                    [
+                        (x[0] - c * vthickness // 2, x[1]),
+                        (x[0] + c * vthickness // 2, x[1]),
+                    ]
+                )
                 cuts.append(cut)
 
         self.backbonePieces = pieces
@@ -2566,14 +2986,16 @@ class Panel:
                 min(corner[0], opposite[0]),
                 min(corner[1], opposite[1]),
                 max(corner[0], opposite[0]),
-                max(corner[1], opposite[1])
+                max(corner[1], opposite[1]),
             )
             filletCircle = Point(opposite).buffer(radius, resolution=16)
 
             cutShape = square.difference(filletCircle)
             self.boardSubstrate.cut(cutShape)
 
-    def addCornerChamfers(self, horizontalSize: KiLength, verticalSize: Optional[KiLength] = None):
+    def addCornerChamfers(
+        self, horizontalSize: KiLength, verticalSize: Optional[KiLength] = None
+    ):
         """
         Add chamfers to the panel frame. The chamfer is specified as size in
         horizontal and vertical direction. If you specify only the horizontal
@@ -2609,17 +3031,24 @@ class Panel:
         for substrate in self.substrates:
             substrate.translate(vec)
         self.boardSubstrate.translate(vec)
-        self.backboneLines = [shapely.affinity.translate(bline, vec[0], vec[1])
-                              for bline in self.backboneLines]
-        self.forwardTabs = [shapely.affinity.translate(t, vec[0], vec[1])
-                            for t in self.forwardTabs]
+        self.backboneLines = [
+            shapely.affinity.translate(bline, vec[0], vec[1])
+            for bline in self.backboneLines
+        ]
+        self.forwardTabs = [
+            shapely.affinity.translate(t, vec[0], vec[1]) for t in self.forwardTabs
+        ]
         if self.backbonePieces is not None:
-            self.backbonePieces = [shapely.affinity.translate(p, vec[0], vec[1])
-                                   for p in self.backbonePieces]
-        self.debugReverseTabs = [shapely.affinity.translate(t, vec[0], vec[1])
-                                 for t in self.debugReverseTabs]
-        self.debugRawFrame = [shapely.affinity.translate(g, vec[0], vec[1])
-                              for g in self.debugRawFrame]
+            self.backbonePieces = [
+                shapely.affinity.translate(p, vec[0], vec[1])
+                for p in self.backbonePieces
+            ]
+        self.debugReverseTabs = [
+            shapely.affinity.translate(t, vec[0], vec[1]) for t in self.debugReverseTabs
+        ]
+        self.debugRawFrame = [
+            shapely.affinity.translate(g, vec[0], vec[1]) for g in self.debugRawFrame
+        ]
         self.hVCuts = [c + vec[1] for c in self.hVCuts]
         self.vVCuts = [c + vec[0] for c in self.vVCuts]
         for c in self.vVCuts:
@@ -2683,6 +3112,7 @@ def getFootprintByReference(board, reference):
             return f
     raise RuntimeError(f"Footprint with reference '{reference}' not found")
 
+
 def extractSourceAreaByAnnotation(board, reference, layer=Layer.Edge_Cuts):
     """
     Given a board and a reference to annotation in the form of symbol
@@ -2692,7 +3122,9 @@ def extractSourceAreaByAnnotation(board, reference, layer=Layer.Edge_Cuts):
     try:
         annotation = getFootprintByReference(board, reference)
     except Exception:
-        raise RuntimeError(f"Cannot extract board - boards is specified via footprint with reference '{reference}' which was not found")
+        raise RuntimeError(
+            f"Cannot extract board - boards is specified via footprint with reference '{reference}' which was not found"
+        )
     tip = annotation.GetPosition()
     edges = collectEdges(board, layer)
     # KiCAD 6 will need an adjustment - method Collide was introduced with
@@ -2702,5 +3134,7 @@ def extractSourceAreaByAnnotation(board, reference, layer=Layer.Edge_Cuts):
     rings = extractRings(edges)
     ringPointedAt = indexOf(rings, lambda x: pointedAt in x)
     if ringPointedAt == -1:
-        raise RuntimeError(f"Annotation symbol '{reference}' does not point to a board edge")
+        raise RuntimeError(
+            f"Annotation symbol '{reference}' does not point to a board edge"
+        )
     return findBoundingBox([edges[i] for i in rings[ringPointedAt]])

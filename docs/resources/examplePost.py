@@ -1,5 +1,6 @@
-from kikit.units import mm
 from kikit.common import toKiCADPoint
+from kikit.units import mm
+
 
 def kikitPostprocess(panel, arg):
     minx, miny, maxx, maxy = panel.panelBBox()

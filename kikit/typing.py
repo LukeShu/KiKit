@@ -1,9 +1,10 @@
 from __future__ import annotations
-from abc import abstractmethod
-from typing import Tuple, TypeVar, Protocol
 
+from abc import abstractmethod
+from typing import Protocol, Tuple, TypeVar
 
 Box = Tuple[float, float, float, float]
+
 
 class Comparable(Protocol):
     """Protocol for annotating comparable types."""
@@ -11,6 +12,7 @@ class Comparable(Protocol):
     @abstractmethod
     def __lt__(self, other: Any) -> bool:
         pass
+
 
 T = TypeVar("T")
 ComparableT = TypeVar("ComparableT", bound=Comparable)

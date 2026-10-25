@@ -1,5 +1,6 @@
 import click
 
+
 @click.group()
 def export():
     """
@@ -7,15 +8,18 @@ def export():
     """
     pass
 
+
 @click.command()
 @click.argument("boardfile", type=click.Path(dir_okay=False))
 @click.argument("outputdir", type=click.Path(file_okay=False), default=None)
 def gerber(boardfile, outputdir):
-    from kikit.export import gerberImpl
     from kikit.common import fakeKiCADGui
+    from kikit.export import gerberImpl
+
     app = fakeKiCADGui()
 
     gerberImpl(boardfile, outputdir)
+
 
 @click.command()
 @click.argument("boardfile", type=click.Path(dir_okay=False))
@@ -28,11 +32,13 @@ def dxf(boardfile, outputdir):
 
     This command is designed for building 3D printed stencils
     """
-    from kikit.export import dxfImpl
     from kikit.common import fakeKiCADGui
+    from kikit.export import dxfImpl
+
     app = fakeKiCADGui()
 
     dxfImpl(boardfile, outputdir)
+
 
 export.add_command(gerber)
 export.add_command(dxf)

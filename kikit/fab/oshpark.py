@@ -1,11 +1,16 @@
-import pcbnew
 import os
 import shutil
 from pathlib import Path
-from kikit.export import gerberImpl, exportSettingsOSHPark, fullGerberPlotPlan
+
+import pcbnew
+
+from kikit.export import exportSettingsOSHPark, fullGerberPlotPlan, gerberImpl
 from kikit.fab.common import ensurePassingDrc, expandNameTemplate
 
-plotPlanNoVCuts = [(name, id, comment) for name, id, comment in fullGerberPlotPlan if name != "CmtUser"]
+plotPlanNoVCuts = [
+    (name, id, comment) for name, id, comment in fullGerberPlotPlan if name != "CmtUser"
+]
+
 
 def exportOSHPark(board, outputdir, nametemplate, drc):
     """
@@ -19,7 +24,11 @@ def exportOSHPark(board, outputdir, nametemplate, drc):
 
     gerberdir = os.path.join(outputdir, "gerber")
     shutil.rmtree(gerberdir, ignore_errors=True)
-    gerberImpl(board, gerberdir, plot_plan=plotPlanNoVCuts, settings=exportSettingsOSHPark)
+    gerberImpl(
+        board, gerberdir, plot_plan=plotPlanNoVCuts, settings=exportSettingsOSHPark
+    )
 
     archiveName = expandNameTemplate(nametemplate, "gerbers", loadedBoard)
-    shutil.make_archive(os.path.join(outputdir, archiveName), "zip", outputdir, "gerber")
+    shutil.make_archive(
+        os.path.join(outputdir, archiveName), "zip", outputdir, "gerber"
+    )

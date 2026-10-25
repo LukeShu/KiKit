@@ -1,16 +1,19 @@
-import click
-from pathlib import Path
-import sys
-import os
-import json
 import glob
+import json
+import os
 import shutil
 import subprocess
+import sys
 import tempfile
+from datetime import datetime
+from pathlib import Path
+
+import click
 import markdown2
 import pybars
-from datetime import datetime
+
 from kikit import export
+
 
 def resolveTemplatePath(path):
     """
@@ -26,16 +29,17 @@ def resolveTemplatePath(path):
     TEMPLATES = os.path.join(PKG_BASE, "resources/present/templates")
     if os.path.exists(os.path.join(TEMPLATES, path, "template.json")):
         return os.path.join(TEMPLATES, path)
-    raise RuntimeError("'{}' is not a name or a path for existing template. Perhaps you miss template.json in the template?")
+    raise RuntimeError(
+        "'{}' is not a name or a path for existing template. Perhaps you miss template.json in the template?"
+    )
+
 
 def readTemplate(path):
     """
     Resolve template path, read the property file and return a subclass of
     Template which can render the template.
     """
-    templateClasses = {
-        "HtmlTemplate": HtmlTemplate
-    }
+    templateClasses = {"HtmlTemplate": HtmlTemplate}
     path = resolveTemplatePath(path)
     with open(os.path.join(path, "template.json"), encoding="utf-8") as jsonFile:
         parameters = json.load(jsonFile)
@@ -48,6 +52,7 @@ def readTemplate(path):
     except KeyError:
         raise RuntimeError("Unknown template type '{}'".format(tType))
 
+
 def copyRelativeTo(sourceTree, sourceFile, outputDir):
     sourceTree = os.path.abspath(sourceTree)
     sourceFile = os.path.abspath(sourceFile)
@@ -56,10 +61,13 @@ def copyRelativeTo(sourceTree, sourceFile, outputDir):
     Path(outputDir).mkdir(parents=True, exist_ok=True)
     shutil.copy(sourceFile, outputDir)
 
+
 class Template:
     def __init__(self, directory):
         self.directory = directory
-        with open(os.path.join(directory, "template.json"), encoding="utf-8") as jsonFile:
+        with open(
+            os.path.join(directory, "template.json"), encoding="utf-8"
+        ) as jsonFile:
             self.parameters = json.load(jsonFile)
         self.extraResources = []
         self.boards = []
@@ -72,7 +80,9 @@ class Template:
         by addResource to the output directory.
         """
         for pattern in self.parameters["resources"]:
-            for path in glob.glob(os.path.join(self.directory, pattern), recursive=True):
+            for path in glob.glob(
+                os.path.join(self.directory, pattern), recursive=True
+            ):
                 copyRelativeTo(self.directory, path, outputDirectory)
         for pattern in self.extraResources:
             for path in glob.glob(pattern, recursive=True):
@@ -89,11 +99,7 @@ class Template:
         """
         Add board
         """
-        self.boards.append({
-            "name": name,
-            "comment": comment,
-            "source": boardfile
-        })
+        self.boards.append({"name": name, "comment": comment, "source": boardfile})
 
     def _renderBoards(self, outputDirectory):
         """
@@ -102,7 +108,9 @@ class Template:
         """
         pcbdraw = shutil.which("pcbdraw")
         if not pcbdraw:
-            raise RuntimeError("PcbDraw needs to be installed in order to render boards")
+            raise RuntimeError(
+                "PcbDraw needs to be installed in order to render boards"
+            )
 
         dirPrefix = "boards"
         boardDir = os.path.join(outputDirectory, dirPrefix)
@@ -114,17 +122,39 @@ class Template:
             boardDesc["gerbers"] = os.path.join(dirPrefix, boardName + "-gerbers.zip")
             boardDesc["file"] = os.path.join(dirPrefix, boardName + ".kicad_pcb")
 
-            subprocess.check_call([pcbdraw, "plot", "--vcuts=Cmts.User", "--silent", "--side=front", boardDesc["source"],
-                os.path.join(outputDirectory, boardDesc["front"])])
-            subprocess.check_call([pcbdraw, "plot", "--vcuts=Cmts.User", "--silent", "--side=back", boardDesc["source"],
-                os.path.join(outputDirectory, boardDesc["back"])])
+            subprocess.check_call(
+                [
+                    pcbdraw,
+                    "plot",
+                    "--vcuts=Cmts.User",
+                    "--silent",
+                    "--side=front",
+                    boardDesc["source"],
+                    os.path.join(outputDirectory, boardDesc["front"]),
+                ]
+            )
+            subprocess.check_call(
+                [
+                    pcbdraw,
+                    "plot",
+                    "--vcuts=Cmts.User",
+                    "--silent",
+                    "--side=back",
+                    boardDesc["source"],
+                    os.path.join(outputDirectory, boardDesc["back"]),
+                ]
+            )
 
             tmp = tempfile.mkdtemp()
             export.gerberImpl(boardDesc["source"], tmp)
-            shutil.make_archive(os.path.join(outputDirectory, boardDesc["gerbers"])[:-4], "zip", tmp)
+            shutil.make_archive(
+                os.path.join(outputDirectory, boardDesc["gerbers"])[:-4], "zip", tmp
+            )
             shutil.rmtree(tmp)
 
-            shutil.copy(boardDesc["source"], os.path.join(outputDirectory, boardDesc["file"]))
+            shutil.copy(
+                boardDesc["source"], os.path.join(outputDirectory, boardDesc["file"])
+            )
 
     def render(self, outputDirectory):
         self._copyResources(outputDirectory)
@@ -157,23 +187,32 @@ class HtmlTemplate(Template):
     def addDescriptionFile(self, description):
         if not description.endswith(".md"):
             raise RuntimeError("Only markdown descriptions are supported for now")
-        self.description = markdown2.markdown_path(description, extras=["fenced-code-blocks", "tables"])
+        self.description = markdown2.markdown_path(
+            description, extras=["fenced-code-blocks", "tables"]
+        )
 
     def _renderPage(self, outputDirectory):
-        with open(os.path.join(self.directory, "index.html"), encoding="utf-8") as templateFile:
+        with open(
+            os.path.join(self.directory, "index.html"), encoding="utf-8"
+        ) as templateFile:
             template = pybars.Compiler().compile(templateFile.read())
         gitRev = self.gitRevision()
-        content = template({
-            "repo": self.repository,
-            "gitRev": gitRev,
-            "gitRevShort": gitRev[:7] if gitRev else None,
-            "datetime": self.currentDateTime(),
-            "name": self.name,
-            "boards": self.boards,
-            "description": self.description
-        })
-        with open(os.path.join(outputDirectory, "index.html"),"w", encoding="utf-8") as outFile:
+        content = template(
+            {
+                "repo": self.repository,
+                "gitRev": gitRev,
+                "gitRevShort": gitRev[:7] if gitRev else None,
+                "datetime": self.currentDateTime(),
+                "name": self.name,
+                "boards": self.boards,
+                "description": self.description,
+            }
+        )
+        with open(
+            os.path.join(outputDirectory, "index.html"), "w", encoding="utf-8"
+        ) as outFile:
             outFile.write(content)
+
 
 def boardpage(outdir, description, board, resource, template, repository, name):
     try:
@@ -190,8 +229,3 @@ def boardpage(outdir, description, board, resource, template, repository, name):
     except Exception as e:
         sys.stderr.write("An error occurred: " + str(e) + "\n")
         sys.exit(1)
-
-
-
-
-

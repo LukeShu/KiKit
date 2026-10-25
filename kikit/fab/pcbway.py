@@ -1,14 +1,17 @@
-import click
-import pcbnew
 import csv
 import os
 import re
-import sys
 import shutil
+import sys
 from pathlib import Path
-from kikit.fab.common import *
+
+import click
+import pcbnew
+
 from kikit.common import *
-from kikit.export import gerberImpl, exportSettingsPcbway
+from kikit.export import exportSettingsPcbway, gerberImpl
+from kikit.fab.common import *
+
 
 def collectSolderTypes(board):
     result = {}
@@ -22,14 +25,23 @@ def collectSolderTypes(board):
 
     return result
 
+
 def addVirtualToRefsToIgnore(refsToIgnore, board):
     for footprint in board.GetFootprints():
         if excludeFromPos(footprint):
             refsToIgnore.append(footprint.GetReference())
 
-def collectBom(components, manufacturerFields, partNumberFields,
-               descriptionFields, notesFields, typeFields, footprintFields,
-               ignore):
+
+def collectBom(
+    components,
+    manufacturerFields,
+    partNumberFields,
+    descriptionFields,
+    notesFields,
+    typeFields,
+    footprintFields,
+    ignore,
+):
     bom = {}
 
     # Use KiCad footprint as fallback for footprint
@@ -41,7 +53,11 @@ def collectBom(components, manufacturerFields, partNumberFields,
         if getUnit(c) != 1:
             continue
         reference = getReference(c)
-        if reference.startswith("#PWR") or reference.startswith("#FL") or reference in ignore:
+        if (
+            reference.startswith("#PWR")
+            or reference.startswith("#FL")
+            or reference in ignore
+        ):
             continue
         if hasattr(c, "in_bom") and not c.in_bom:
             continue
@@ -80,23 +96,27 @@ def collectBom(components, manufacturerFields, partNumberFields,
             if footprint is not None:
                 break
 
-        cType = (
-            description,
-            footprint,
-            manufacturer,
-            partNumber,
-            notes,
-            solderType
-        )
+        cType = (description, footprint, manufacturer, partNumber, notes, solderType)
         bom[cType] = bom.get(cType, []) + [reference]
     return bom
+
 
 def bomToCsv(bomData, filename, nBoards, types):
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["Item #", "Designator", "Qty", "Manufacturer",
-                         "Mfg Part #", "Description / Value", "Footprint",
-                         "Type", "Your Instructions / Notes"])
+        writer.writerow(
+            [
+                "Item #",
+                "Designator",
+                "Qty",
+                "Manufacturer",
+                "Mfg Part #",
+                "Description / Value",
+                "Footprint",
+                "Type",
+                "Your Instructions / Notes",
+            ]
+        )
         item_no = 1
 
         tmp = {}
@@ -109,16 +129,41 @@ def bomToCsv(bomData, filename, nBoards, types):
             description, footprint, manufacturer, partNumber, notes, solderType = cType
             if solderType is None:
                 solderType = types[references[0]]
-            writer.writerow([item_no, ",".join(references),
-                             len(references) * nBoards, manufacturer,
-                             partNumber, description, footprint,
-                             solderType, notes])
+            writer.writerow(
+                [
+                    item_no,
+                    ",".join(references),
+                    len(references) * nBoards,
+                    manufacturer,
+                    partNumber,
+                    description,
+                    footprint,
+                    solderType,
+                    notes,
+                ]
+            )
             item_no += 1
 
 
-def exportPcbway(board, outputdir, assembly, schematic, ignore,
-                 manufacturer, partnumber, description, notes, soldertype,
-                 footprint, corrections, correctionpatterns, missingerror, nboards, nametemplate, drc):
+def exportPcbway(
+    board,
+    outputdir,
+    assembly,
+    schematic,
+    ignore,
+    manufacturer,
+    partnumber,
+    description,
+    notes,
+    soldertype,
+    footprint,
+    corrections,
+    correctionpatterns,
+    missingerror,
+    nboards,
+    nametemplate,
+    drc,
+):
     """
     Prepare fabrication files for PCBWay including their assembly service
     """
@@ -137,7 +182,9 @@ def exportPcbway(board, outputdir, assembly, schematic, ignore,
     gerberImpl(board, gerberdir, settings=exportSettingsPcbway)
 
     archiveName = expandNameTemplate(nametemplate, "gerbers", loadedBoard)
-    shutil.make_archive(os.path.join(outputdir, archiveName), "zip", outputdir, "gerber")
+    shutil.make_archive(
+        os.path.join(outputdir, archiveName), "zip", outputdir, "gerber"
+    )
 
     if not assembly:
         return
@@ -146,19 +193,25 @@ def exportPcbway(board, outputdir, assembly, schematic, ignore,
 
     ensureValidSch(schematic)
 
-
     components = extractComponents(schematic)
-    correctionFields    = [x.strip() for x in corrections.split(",")]
-    manufacturerFields  = [x.strip() for x in manufacturer.split(",")]
-    partNumberFields    = [x.strip() for x in partnumber.split(",")]
-    descriptionFields   = [x.strip() for x in description.split(",")]
-    notesFields         = [x.strip() for x in notes.split(",")]
-    typeFields          = [x.strip() for x in soldertype.split(",")]
-    footprintFields     = [x.strip() for x in footprint.split(",")]
+    correctionFields = [x.strip() for x in corrections.split(",")]
+    manufacturerFields = [x.strip() for x in manufacturer.split(",")]
+    partNumberFields = [x.strip() for x in partnumber.split(",")]
+    descriptionFields = [x.strip() for x in description.split(",")]
+    notesFields = [x.strip() for x in notes.split(",")]
+    typeFields = [x.strip() for x in soldertype.split(",")]
+    footprintFields = [x.strip() for x in footprint.split(",")]
     addVirtualToRefsToIgnore(refsToIgnore, loadedBoard)
-    bom = collectBom(components, manufacturerFields, partNumberFields,
-                     descriptionFields, notesFields, typeFields,
-                     footprintFields, refsToIgnore)
+    bom = collectBom(
+        components,
+        manufacturerFields,
+        partNumberFields,
+        descriptionFields,
+        notesFields,
+        typeFields,
+        footprintFields,
+        refsToIgnore,
+    )
 
     missingFields = False
     for type, references in bom.items():
@@ -166,11 +219,27 @@ def exportPcbway(board, outputdir, assembly, schematic, ignore,
         if not manu or not partno:
             missingFields = True
             for r in references:
-                print(f"WARNING: Component {r} is missing manufacturer and/or part number")
+                print(
+                    f"WARNING: Component {r} is missing manufacturer and/or part number"
+                )
     if missingFields and missingerror:
         sys.exit("There are components with missing ordercode, aborting")
 
-    posData = collectPosData(loadedBoard, correctionFields, bom=components, correctionFile=correctionpatterns)
-    posDataToFile(posData, os.path.join(outputdir, expandNameTemplate(nametemplate, "pos", loadedBoard) + ".csv"))
+    posData = collectPosData(
+        loadedBoard, correctionFields, bom=components, correctionFile=correctionpatterns
+    )
+    posDataToFile(
+        posData,
+        os.path.join(
+            outputdir, expandNameTemplate(nametemplate, "pos", loadedBoard) + ".csv"
+        ),
+    )
     types = collectSolderTypes(loadedBoard)
-    bomToCsv(bom, os.path.join(outputdir, expandNameTemplate(nametemplate, "bom", loadedBoard) + ".csv"), nboards, types)
+    bomToCsv(
+        bom,
+        os.path.join(
+            outputdir, expandNameTemplate(nametemplate, "bom", loadedBoard) + ".csv"
+        ),
+        nboards,
+        types,
+    )

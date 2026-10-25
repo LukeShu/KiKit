@@ -1,11 +1,12 @@
 # Based on https://github.com/KiCad/kicad-source-mirror/blob/master/demos/python_scripts_examples/gen_gerber_and_drill_files_board.py
-import sys
 import os
+import sys
+
 import pcbnew
 from pcbnew import *
-from kikit.pcbnew_utils import DXF_UNITS_MM
 
 from kikit.defs import Layer
+from kikit.pcbnew_utils import DXF_UNITS_MM
 
 fullGerberPlotPlan = [
     # name, id, comment
@@ -18,7 +19,7 @@ fullGerberPlotPlan = [
     ("MaskBottom", Layer.B_Mask, "Mask bottom"),
     ("MaskTop", Layer.F_Mask, "Mask top"),
     ("EdgeCuts", Layer.Edge_Cuts, "Edges"),
-    ("CmtUser", Layer.Cmts_User, "V-CUT")
+    ("CmtUser", Layer.Cmts_User, "V-CUT"),
 ]
 
 exportSettingsJlcpcb = {
@@ -62,6 +63,7 @@ def hasCopper(plotPlan):
             return True
     return False
 
+
 def setExcludeEdgeLayer(plotOptions, excludeEdge):
     try:
         plotOptions.SetExcludeEdgeLayer(excludeEdge)
@@ -71,7 +73,14 @@ def setExcludeEdgeLayer(plotOptions, excludeEdge):
         else:
             plotOptions.SetLayerSelection(LSET(Layer.Edge_Cuts))
 
-def gerberImpl(boardfile, outputdir, plot_plan=fullGerberPlotPlan, drilling=True, settings=exportSettingsJlcpcb):
+
+def gerberImpl(
+    boardfile,
+    outputdir,
+    plot_plan=fullGerberPlotPlan,
+    drilling=True,
+    settings=exportSettingsJlcpcb,
+):
     """
     Export board to gerbers.
 
@@ -127,7 +136,7 @@ def gerberImpl(boardfile, outputdir, plot_plan=fullGerberPlotPlan, drilling=True
             raise RuntimeError("KiCAD plot error")
 
     if hasCopper(plot_plan):
-        #generate internal copper layers, if any
+        # generate internal copper layers, if any
         for i, layer in enumerate(Layer.innerCu(board.GetCopperLayerCount())):
             popt.SetSkipPlotNPTH_Pads(True)
             pctl.SetLayer(layer)
@@ -145,7 +154,7 @@ def gerberImpl(boardfile, outputdir, plot_plan=fullGerberPlotPlan, drilling=True
         # Fabricators need drill files.
         # sometimes a drill map file is asked (for verification purpose)
         drlwriter = EXCELLON_WRITER(board)
-        mapFmt = settings['MapFileFormat']
+        mapFmt = settings["MapFileFormat"]
         drlwriter.SetMapFileFormat(mapFmt)
 
         mirror = False
@@ -169,12 +178,13 @@ def gerberImpl(boardfile, outputdir, plot_plan=fullGerberPlotPlan, drilling=True
         drlwriter.CreateDrillandMapFilesSet(pctl.GetPlotDirName(), genDrl, genMap)
 
         # One can create a text file to report drill statistics
-        rptfn = pctl.GetPlotDirName() + 'drill_report.rpt'
+        rptfn = pctl.GetPlotDirName() + "drill_report.rpt"
         drlwriter.GenDrillReportFile(rptfn)
 
-    job_fn=os.path.dirname(pctl.GetPlotFileName()) + '/' + os.path.basename(boardfile)
-    job_fn=os.path.splitext(job_fn)[0] + '.gbrjob'
+    job_fn = os.path.dirname(pctl.GetPlotFileName()) + "/" + os.path.basename(boardfile)
+    job_fn = os.path.splitext(job_fn)[0] + ".gbrjob"
     jobfile_writer.CreateJobFile(job_fn)
+
 
 def pasteDxfExport(board, plotDir):
     pctl = PLOT_CONTROLLER(board)
@@ -206,6 +216,7 @@ def pasteDxfExport(board, plotDir):
             print("plot error")
     pctl.ClosePlot()
     return tuple(output)
+
 
 def dxfImpl(boardfile, outputdir):
     basename = os.path.dirname(boardfile)

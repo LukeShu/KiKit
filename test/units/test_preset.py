@@ -4,7 +4,9 @@ import pytest
 
 from kikit.defs import Layer
 from kikit.panel_features.copperFill import (
-    HatchedCopperFill, HexCopperFill, SolidCopperFill
+    HatchedCopperFill,
+    HexCopperFill,
+    SolidCopperFill,
 )
 from kikit.panelize_ui_impl import *
 
@@ -42,11 +44,14 @@ def copperfillPreset(type, layers):
     }
 
 
-@pytest.mark.parametrize("type, featureType", [
-    ("solid", SolidCopperFill),
-    ("hatched", HatchedCopperFill),
-    ("hex", HexCopperFill),
-])
+@pytest.mark.parametrize(
+    "type, featureType",
+    [
+        ("solid", SolidCopperFill),
+        ("hatched", HatchedCopperFill),
+        ("hex", HexCopperFill),
+    ],
+)
 def test_copperfillAllUsesOnlyProjectLayers(type, featureType):
     panel = FakeCopperfillPanel([Layer.F_Cu, Layer.In1_Cu, Layer.B_Cu])
 
@@ -79,25 +84,15 @@ def test_presetLayout():
         validatePresetLayout({"a": []})
     validatePresetLayout({"a": {"b": 43}})
 
+
 def test_merge():
     # Merge into empty
     a = {}
     mergePresets(a, {"a": {}})
     assert a == {"a": {}}
 
-    mergePresets(a, {"a": {
-        "value": 42,
-        "otherValue": 70
-    }})
-    assert a == {"a": {
-        "value": 42,
-        "otherValue": 70
-    }}
+    mergePresets(a, {"a": {"value": 42, "otherValue": 70}})
+    assert a == {"a": {"value": 42, "otherValue": 70}}
 
-    mergePresets(a, {"a": {
-        "value": 43
-    }})
-    assert a == {"a": {
-        "value": 43,
-        "otherValue": 70
-    }}
+    mergePresets(a, {"a": {"value": 43}})
+    assert a == {"a": {"value": 43, "otherValue": 70}}

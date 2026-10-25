@@ -1,11 +1,13 @@
 # Simple, rather hacky parser for eeshema files (.sch). This is a mid-term
 # workaround before proper support for scripting is introduced into Eeschema
 
-import shlex
 import os
+import shlex
+
 
 class EeschemaException(Exception):
     pass
+
 
 def getField(component, field):
     for f in component["fields"]:
@@ -22,6 +24,7 @@ def getField(component, field):
             return f["text"]
     return None
 
+
 def readEeschemaLine(file):
     line = ""
     quotationOpen = False
@@ -31,10 +34,11 @@ def readEeschemaLine(file):
             raise EeschemaException("Cannot parse EEschema, line expected, got EOF")
         if c == '"':
             quotationOpen = not quotationOpen
-        if c == '\n' and not quotationOpen:
+        if c == "\n" and not quotationOpen:
             break
         line += c
     return line.strip()
+
 
 def readHeader(file):
     VERSION_STRING = "EESchema Schematic File Version"
@@ -46,13 +50,13 @@ def readHeader(file):
             return header
 
         if line.startswith(VERSION_STRING):
-            header["version"] = line[len(VERSION_STRING):].strip()
+            header["version"] = line[len(VERSION_STRING) :].strip()
         elif line.startswith("LIBS:"):
-            header["libs"] = header.get("libs", []) + [line[len("LIBS:"):].strip()]
+            header["libs"] = header.get("libs", []) + [line[len("LIBS:") :].strip()]
         elif line.startswith("EELAYER"):
             pass
         elif line.startswith(DESCR_STRING):
-            header["size"] = line[len(DESCR_STRING):].split()
+            header["size"] = line[len(DESCR_STRING) :].split()
         elif line.startswith("Sheet"):
             items = shlex.split(line)
             header["sheet"] = (int(items[1]), int(items[2]))
@@ -76,6 +80,7 @@ def readHeader(file):
             header["encoding"] = shlex.split(line)[1]
         else:
             raise EeschemaException(f"Unexpected line: '{line}'")
+
 
 def readComponent(file, sheetPath=""):
     component = {}
@@ -105,7 +110,7 @@ def readComponent(file, sheetPath=""):
                 "size": items[6],
                 "flags": items[7],
                 "justify": items[8],
-                "style": items[9]
+                "style": items[9],
             }
             if field["number"] >= 4:
                 field["name"] = items[10]
@@ -117,12 +122,12 @@ def readComponent(file, sheetPath=""):
             path = None
             ref = None
             for item in items:
-                if item.startswith('Path='):
-                    path = item[len('Path='):]
+                if item.startswith("Path="):
+                    path = item[len("Path=") :]
                     break
             for item in items:
-                if item.startswith('Ref='):
-                    ref = item[len('Ref='):]
+                if item.startswith("Ref="):
+                    ref = item[len("Ref=") :]
                     break
             if path is not None and ref is not None:
                 compPath = sheetPath + "/" + component["u"]
@@ -140,6 +145,7 @@ def readComponent(file, sheetPath=""):
             except ValueError:
                 raise EeschemaException(f"Unexpected line: '{line}'")
 
+
 def readSheet(file):
     # Note that the parser is incomplete an only extracts filename and reference
     # from the sheet as it is all we need currently
@@ -153,6 +159,7 @@ def readSheet(file):
             sheet["f1"] = items[1]
         elif line.startswith("U "):
             sheet["u"] = shlex.split(line)[1]
+
 
 def extractComponents(filename, path=""):
     """
@@ -177,8 +184,10 @@ def extractComponents(filename, path=""):
         components += extractComponents(sheetfilename, path + "/" + s["u"])
     return components
 
+
 def getUnit(component):
     return component["unit"]
+
 
 def getReference(component):
     return component["reference"]
