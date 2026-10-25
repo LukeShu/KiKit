@@ -6,7 +6,7 @@ Generate previews of the available scripts
 
 import sys
 
-from kikit.doc import runBoardExampleJoin, runScriptingExample
+from kikit.doc import runBoardExample, runExampleJoin
 
 counter = 0
 
