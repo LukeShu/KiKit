@@ -6,12 +6,12 @@ Generate previews of the available scripts
 
 import sys
 
-from kikit.doc import runBoardExampleJoin, runScriptingExample
+from kikit.doc import runBoardExample, runExampleJoin
 
 counter = 0
 
 
-def autoName():
+def autoName() -> str:
     global counter
     counter += 1
     return f"scriptingPanel{counter}"

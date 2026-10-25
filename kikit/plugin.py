@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable
 import pcbnew
 from shapely.geometry import LineString
 
-from kikit.actionPlugins import importAllPlugins  # type: ignore
+from kikit.actionPlugins import importAllPlugins
 from kikit.panelize import Panel
 from kikit.substrate import Substrate
 

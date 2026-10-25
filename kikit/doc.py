@@ -1,3 +1,4 @@
+import collections.abc
 import inspect
 import os
 import shutil
@@ -5,10 +6,11 @@ import subprocess
 import sys
 import tempfile
 import threading
+import typing
 from itertools import chain
 
 
-def header(func):
+def header(func: typing.Callable[..., typing.Any]) -> str:
     signature = inspect.signature(func)
     args = [
         (
@@ -34,22 +36,22 @@ def header(func):
     return "\n".join(lines)
 
 
-def printHeader(func):
+def printHeader(func: typing.Callable[..., typing.Any]) -> None:
     print(f"\n#### `{func.__name__}`")
     print(f"```\n{header(func)}\n```")
 
 
-def printHelp(x):
+def printHelp(x: object) -> None:
     print(inspect.getdoc(x))
 
 
-def quotePosix(args):
+def quotePosix(args: collections.abc.Sequence[str]) -> typing.List[str]:
     """
     Given a list of command line arguments, quote them so they can be can be
     printed on POSIX
     """
 
-    def q(x):
+    def q(x: str) -> str:
         if " " in x:
             return "'" + x + "'"
         else:
@@ -58,13 +60,13 @@ def quotePosix(args):
     return [q(x) for x in args]
 
 
-def quoteWindows(args):
+def quoteWindows(args: collections.abc.Sequence[str]) -> typing.List[str]:
     """
     Given a list of command line arguments, quote them so they can be can be
     printed in Windows CLI
     """
 
-    def q(x):
+    def q(x: str) -> str:
         if " " in x:
             return '"' + x + '"'
         else:
@@ -73,7 +75,7 @@ def quoteWindows(args):
     return [q(x) for x in args]
 
 
-def panelizeAndDraw(name, command):
+def panelizeAndDraw(name: str, command: typing.List[str]) -> None:
     dirname = tempfile.mkdtemp()
     output = os.path.join(dirname, "x.kicad_pcb")
     try:
@@ -102,10 +104,10 @@ def panelizeAndDraw(name, command):
         shutil.rmtree(dirname)
 
 
-runExampleThreads = []
+runExampleThreads: typing.List[threading.Thread] = []
 
 
-def runBoardExample(name, args):
+def runBoardExample(name: str, args: typing.List[typing.List[str]]) -> None:
     """
     Run kikit CLI command with args - omitting the output file name. Prints a
     markdown with the command and includes a generated board image.
@@ -151,7 +153,7 @@ def runBoardExample(name, args):
     runExampleThreads.append(t)
 
 
-def runScriptingExample(name, args):
+def runScriptingExample(name: str, args: typing.List[typing.List[str]]) -> None:
     """
     Run a Python panelization script that takes the name of the output as a last
     argument and create a drawing of it.
@@ -163,7 +165,7 @@ def runScriptingExample(name, args):
         if i != 0:
             print("    ", end="")
         end = "\n" if i + 1 == len(args) else " \\\n"
-        print(" ".join(quote(c)), end=end)
+        print(" ".join(quotePosix(c)), end=end)
     print("```\n")
     print("![{0}](../resources/{0}.png)".format(name))
 
@@ -173,6 +175,6 @@ def runScriptingExample(name, args):
     runExampleThreads.append(t)
 
 
-def runExampleJoin():
+def runExampleJoin() -> None:
     for t in runExampleThreads:
         t.join()

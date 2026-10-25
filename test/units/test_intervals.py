@@ -1,13 +1,18 @@
+import typing
+
 import pytest
 
 from kikit.intervals import *
+from kikit.typing import Box
+
+_T = typing.TypeVar("_T")
 
 
-def identity(x):
+def identity(x: _T) -> _T:
     return x
 
 
-def test_intersection():
+def test_intersection() -> None:
     a = Interval(0, 2)
     b = Interval(1, 2)
     c = Interval(1, 3)
@@ -20,7 +25,7 @@ def test_intersection():
     assert a.intersect(e) is None
 
 
-def test_IntervalLists():
+def test_IntervalLists() -> None:
     I = Interval
     IL = IntervalList
     a = IL([I(0, 1), I(2, 3), I(5, 10)])
@@ -31,7 +36,7 @@ def test_IntervalLists():
     assert a.intersect(b) == IL([I(0, 1), I(5, 8)])
 
 
-def test_boxNeighbors():
+def test_boxNeighbors() -> None:
     """
     The test case is as follows:
 
@@ -56,7 +61,9 @@ def test_boxNeighbors():
     b6 = (5, 3, 6, 4)
     b7 = (1, 5, 4, 6)
     b8 = (5, 5, 6, 6)
-    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6, b7, b8], 1)}
+    boxes: typing.Dict[object, Box] = {
+        i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6, b7, b8], 1)
+    }
 
     n = BoxNeighbors(boxes)
 
@@ -68,7 +75,7 @@ def test_boxNeighbors():
     assert set(n.top(7)) == set([4, 5])
 
 
-def test_boxNeighborsOverlap():
+def test_boxNeighborsOverlap() -> None:
     """
     The test case is as follows:
 
@@ -86,7 +93,9 @@ def test_boxNeighborsOverlap():
     b5 = (2, 2, 3, 3)
     b6 = (3, 2, 4, 3)
 
-    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6], 1)}
+    boxes: typing.Dict[object, Box] = {
+        i: b for i, b in enumerate([b1, b2, b3, b4, b5, b6], 1)
+    }
 
     n = BoxNeighbors(boxes)
 
@@ -95,7 +104,7 @@ def test_boxNeighborsOverlap():
     assert n.bottom(2) == [5]
 
 
-def test_boxNeighborsNotSameLevel():
+def test_boxNeighborsNotSameLevel() -> None:
     """
     The test case is as follows:
 
@@ -116,7 +125,7 @@ def test_boxNeighborsNotSameLevel():
     b3 = (1, 3, 2, 4)
     b4 = (1, 5, 4, 6)
 
-    boxes = {i: b for i, b in enumerate([b1, b2, b3, b4], 1)}
+    boxes: typing.Dict[object, Box] = {i: b for i, b in enumerate([b1, b2, b3, b4], 1)}
 
     n = BoxNeighbors(boxes)
 
@@ -126,7 +135,7 @@ def test_boxNeighborsNotSameLevel():
     assert n.bottom(1) == [3]
 
 
-def test_bounds():
+def test_bounds() -> None:
     a = [1, 2, 3, 4, 5, 6, 7, 8]
     b = [2, 4, 6, 8, 10, 12, 14]
     c = [1, 2, 2, 2, 2, 3, 4]
@@ -149,7 +158,7 @@ def test_bounds():
     assert lowerBound(c, 1, identity) == -1
 
 
-def test_buildShadows():
+def test_buildShadows() -> None:
     AL = AxialLine
     lines = [AL(1, 2, 3, "L1"), AL(2, 1, 2, "L2")]
     bounds = [AL(0, 0, 3), AL(1, 1, 2), AL(3, 2, 3), AL(4, 0, 2), AL(5, 0, 3)]
@@ -161,7 +170,7 @@ def test_buildShadows():
     ]
 
 
-def test_trimShadows():
+def test_trimShadows() -> None:
     AL = AxialLine
     SL = ShadowLine
     I = Interval
@@ -172,9 +181,9 @@ def test_trimShadows():
     assert shadows == [SL(lines[0].line, I(1, 4)), SL(lines[1].line, I(1, 3))]
 
 
-def test_BoxPartitionLines():
+def test_BoxPartitionLines() -> None:
     pass
-    boxes = {
+    boxes: typing.Dict[object, Box] = {
         1: (0, 5, 1, 6),
         2: (2, 5, 3, 6),
         3: (4, 5, 5, 6),

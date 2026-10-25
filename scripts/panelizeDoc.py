@@ -5,6 +5,7 @@ Generate documentation in markdown format for panelization
 """
 
 import inspect
+import typing
 
 import pcbnew
 
@@ -12,12 +13,12 @@ from kikit import panelize, substrate
 from kikit.doc import header, printHeader, printHelp
 
 
-def synopsis(object):
-    printHeader(object)
-    printHelp(object)
+def synopsis(obj: typing.Callable[..., typing.Any]) -> None:
+    printHeader(obj)
+    printHelp(obj)
 
 
-def classMethods(c):
+def classMethods(c: object) -> None:
     for name, o in inspect.getmembers(c, predicate=inspect.isfunction):
         if name.startswith("_"):
             continue
@@ -108,7 +109,7 @@ print(f"""
 This class has the following relevant members:
 - `board` - `pcbnew.BOARD` of the panel. Does not contain any edges.
 - `substrates` - `kikit.substrate.Substrate` - individual substrates appended
-  via `{printHeader(panelize.Panel.appendBoard)}`. You can use them to get the
+  via `{header(panelize.Panel.appendBoard)}`. You can use them to get the
   original outline (and e.g., generate tabs accroding to it).
 - `boardSubstrate` - `kikit.substrate.Substrate` of the whole panel.
 - `backboneLines` - a list of lines representing backbone candidates. Read more

@@ -119,11 +119,39 @@ venv: pyproject.toml setup.py
 	touch --no-create $@
 
 py_sources = $(shell git ls-files :*.py :!kikit/_version.py :!versioneer.py)
+pyi_sources = $(shell git ls-files :*.pyi)
 
 format:
-	black $(py_sources)
-	isort $(py_sources)
+	black $(py_sources) $(pyi_sources)
+	isort $(py_sources) $(pyi_sources)
 check-format:
-	black --check $(py_sources)
-	isort --check $(py_sources)
+	black --check $(py_sources) $(pyi_sources)
+	isort --check $(py_sources) $(pyi_sources)
 .PHONY: format check-format
+
+mypy_env = MYPYPATH=$(CURDIR)/mypy-stubs
+mypy_env += PYTHONPATH=.$(if $(PYTHONPATH),:$(PYTHONPATH))
+
+mypy_flags = --strict
+#mypy_flags += --no-incremental --verbose
+
+mypy_py_sources = setup.py
+mypy_py_sources += kikit/__init__.py
+mypy_py_sources += kikit/typing.py
+mypy_py_sources += kikit/intervals.py
+mypy_py_sources += kikit/units.py
+mypy_py_sources += kikit/defs.py
+
+mypy_py_sources += test/units/__init__.py
+mypy_py_sources += test/units/test_intervals.py
+mypy_py_sources += test/units/test_units.py
+
+mypy_py_sources += kikit/doc.py
+mypy_py_sources += scripts/exampleDoc.py
+mypy_py_sources += scripts/exampleScripting.py
+mypy_py_sources += scripts/panelizeDoc.py
+mypy_py_sources += scripts/setJson.py
+
+mypy:
+	$(mypy_env) mypy $(mypy_flags) $(mypy_py_sources) $(pyi_sources)
+.PHONY: mypy
