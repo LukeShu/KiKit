@@ -163,7 +163,7 @@ def runScriptingExample(name, args):
         if i != 0:
             print("    ", end="")
         end = "\n" if i + 1 == len(args) else " \\\n"
-        print(" ".join(quote(c)), end=end)
+        print(" ".join(quotePosix(c)), end=end)
     print("```\n")
     print("![{0}](../resources/{0}.png)".format(name))
 
