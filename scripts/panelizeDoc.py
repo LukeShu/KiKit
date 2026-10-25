@@ -108,7 +108,7 @@ print(f"""
 This class has the following relevant members:
 - `board` - `pcbnew.BOARD` of the panel. Does not contain any edges.
 - `substrates` - `kikit.substrate.Substrate` - individual substrates appended
-  via `{printHeader(panelize.Panel.appendBoard)}`. You can use them to get the
+  via `{header(panelize.Panel.appendBoard)}`. You can use them to get the
   original outline (and e.g., generate tabs accroding to it).
 - `boardSubstrate` - `kikit.substrate.Substrate` of the whole panel.
 - `backboneLines` - a list of lines representing backbone candidates. Read more
