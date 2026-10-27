@@ -1,3 +1,5 @@
+import io
+import typing
 from io import StringIO
 from typing import Callable, Dict, Iterable, Optional, Union
 
@@ -13,7 +15,7 @@ class ParseError(RuntimeError):
 # We want the parser to be able to operate on a stream of data, so we define a
 # chunked reader that allows us to go back and extract parts of the string.
 class Stream:
-    def __init__(self, stream, buffer_size=4096):
+    def __init__(self, stream: "io.Reader[str]", buffer_size: int = 4096) -> None:
         self.stream = stream
         self.buffer_size = buffer_size
         self.buffer = ""
@@ -21,7 +23,7 @@ class Stream:
         self.mark_start = -1
         self._fill_buffer()
 
-    def _fill_buffer(self):
+    def _fill_buffer(self) -> bool:
         """Fill the buffer with more data from the stream"""
         # If there's marked content we need to keep, preserve it
         has_grown = True
@@ -44,7 +46,7 @@ class Stream:
             self.position = 0
         return has_grown
 
-    def read(self):
+    def read(self) -> str:
         """Read a single character from the stream"""
         try:
             result = self.buffer[self.position]
@@ -56,7 +58,7 @@ class Stream:
             self.position += 1
         return result
 
-    def readUntilEndOfWhitespace(self):
+    def readUntilEndOfWhitespace(self) -> str:
         whitespace = ""
 
         while True:
@@ -76,7 +78,7 @@ class Stream:
                 break
         return whitespace
 
-    def readUntilEndOfString(self):
+    def readUntilEndOfString(self) -> str:
         result = ""
 
         while True:
@@ -101,7 +103,7 @@ class Stream:
                 break
         return result
 
-    def readUntilEndOfQuotedString(self):
+    def readUntilEndOfQuotedString(self) -> str:
         escaped = False
         result = ""
 
@@ -138,7 +140,7 @@ class Stream:
 
         return result
 
-    def readUntilEndOfLine(self):
+    def readUntilEndOfLine(self) -> str:
         """Read until end of line (inclusive of the newline). Used for comments."""
         result = ""
         while True:
@@ -157,7 +159,7 @@ class Stream:
                 return result
         return result
 
-    def readAtom(self):
+    def readAtom(self) -> "Atom":
         whitespace = self.readUntilEndOfWhitespace()
 
         # We know that there is a next whitespace as readUntilEndOfWhitespace
@@ -170,21 +172,21 @@ class Stream:
             value = self.readUntilEndOfString()
         return Atom(value, leadingWhitespace=whitespace, quoted=quoted)
 
-    def back(self):
+    def back(self) -> None:
         """Move back one character in the stream"""
         if self.position > 0:
             self.position -= 1
         else:
             raise ParseError("Cannot move back")
 
-    def shift(self, expected):
+    def shift(self, expected: str) -> str:
         """Read the next character and verify it matches the expected value"""
         c = self.read()
         if c != expected:
             raise ParseError(f"Expected '{expected}', got {repr(c)}")
         return c
 
-    def readAll(self):
+    def readAll(self) -> str:
         """Read all remaining content from the stream"""
         result = self.buffer[self.position :]
         self.position = len(self.buffer)
@@ -192,16 +194,16 @@ class Stream:
         additional = self.stream.read()
         return result + additional
 
-    def markStart(self):
+    def markStart(self) -> None:
         """Mark the start position of interesting content"""
         self.mark_start = self.position
 
-    def markEnd(self):
+    def markEnd(self) -> None:
         """Mark the end position of interesting content"""
         # We don't need an explicit end marker since position is our current point
         pass
 
-    def getMarkedContent(self):
+    def getMarkedContent(self) -> str:
         """Get the content between the start and current position"""
         if self.mark_start < 0:
             return ""
@@ -215,7 +217,7 @@ class Stream:
         self.mark_start = -1  # Reset marker
         return result
 
-    def isEOF(self):
+    def isEOF(self) -> bool:
         """Check if we've reached the end of the file"""
         if self.position < len(self.buffer):
             return False
@@ -225,20 +227,22 @@ class Stream:
 class Atom:
     __slots__ = ["value", "quoted", "leadingWhitespace"]
 
-    def __init__(self, value, leadingWhitespace="", quoted=False):
+    def __init__(
+        self, value: str, leadingWhitespace: str = "", quoted: bool = False
+    ) -> None:
         self.value = value
         self.quoted = quoted
         self.leadingWhitespace = leadingWhitespace
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.quoted:
             return self.leadingWhitespace + '"' + self.value + '"'
         return self.leadingWhitespace + self.value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Atom({self.value}, '{self.leadingWhitespace}')"
 
-    def __eq__(self, o):
+    def __eq__(self, o: typing.Any) -> bool:
         if isinstance(o, str):
             return self.value == o
         if not isinstance(o, Atom):
@@ -255,9 +259,15 @@ class SExpr:
         "trailingOuterWhitespace",
     ]
 
+    items: typing.List[Union["SExpr", Atom]]
+
     def __init__(
-        self, items=None, leadingWhitespace="", trailingWhitespace="", complete=True
-    ):
+        self,
+        items: Optional[typing.List[Union["SExpr", Atom]]] = None,
+        leadingWhitespace: str = "",
+        trailingWhitespace: str = "",
+        complete: bool = True,
+    ) -> None:
         if items is None:
             self.items = []
         else:
@@ -267,7 +277,7 @@ class SExpr:
         self.complete = complete
         self.trailingOuterWhitespace = ""
 
-    def __str__(self):
+    def __str__(self) -> str:
         # TBA: we should validate that two atoms do not get squished together
         # as they have wrongly specified whitespace
         return (
@@ -279,11 +289,11 @@ class SExpr:
             + self.trailingOuterWhitespace
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         val = [x.__repr__() for x in self.items]
         return f"Expr([{', '.join(val)}], '{self.leadingWhitespace}', '{self.trailingWhitespace}')"
 
-    def __eq__(self, o):
+    def __eq__(self, o: typing.Any) -> bool:
         if not isinstance(o, SExpr):
             return False
         return (
@@ -293,17 +303,26 @@ class SExpr:
             and self.complete == o.complete
         )
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[Union["SExpr", Atom]]:
         return self.items.__iter__()
 
-    def __getitem__(self, key):
+    @typing.overload
+    def __getitem__(self, key: typing.SupportsIndex) -> Union["SExpr", Atom]: ...
+    @typing.overload
+    def __getitem__(
+        self, key: "slice[Optional[typing.SupportsIndex]]"
+    ) -> typing.List[Union["SExpr", Atom]]: ...
+
+    def __getitem__(
+        self, key: Union[typing.SupportsIndex, "slice[Optional[typing.SupportsIndex]]"]
+    ) -> Union["SExpr", Atom, typing.List[Union["SExpr", Atom]]]:
         return self.items.__getitem__(key)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.items.__len__()
 
 
-def readWhitespaceWithComments(stream):
+def readWhitespaceWithComments(stream: Stream) -> str:
     stream.markStart()
 
     while True:
@@ -325,7 +344,7 @@ def readWhitespaceWithComments(stream):
     return stream.getMarkedContent()
 
 
-def readSexpr(stream, limit=None):
+def readSexpr(stream: Stream, limit: Optional[int] = None) -> SExpr:
     """
     Reads SExpression from the stream. You can optionally try to parse only the
     first n nodes by specifying limit;
@@ -380,7 +399,9 @@ def readSexpr(stream, limit=None):
     return expr
 
 
-def parseSexprF(sourceStream, limit=None, buffer_size=4096):
+def parseSexprF(
+    sourceStream: "io.Reader[str]", limit: Optional[int] = None, buffer_size: int = 4096
+) -> SExpr:
     stream = Stream(sourceStream, buffer_size=buffer_size)
     lw = stream.readUntilEndOfWhitespace()
     s = readSexpr(stream, limit=limit)
@@ -389,11 +410,13 @@ def parseSexprF(sourceStream, limit=None, buffer_size=4096):
     return s
 
 
-def parseSexprS(s, limit=None, buffer_size=4096):
+def parseSexprS(s: str, limit: Optional[int] = None, buffer_size: int = 4096) -> SExpr:
     return parseSexprF(StringIO(s), limit=limit, buffer_size=buffer_size)
 
 
-def parseSexprListF(sourceStream, limit=None, buffer_size=4096):
+def parseSexprListF(
+    sourceStream: "io.Reader[str]", limit: Optional[int] = None, buffer_size: int = 4096
+) -> typing.List[SExpr]:
     sexprs = []
     stream = Stream(sourceStream, buffer_size=buffer_size)
 

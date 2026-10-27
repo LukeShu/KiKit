@@ -1,11 +1,10 @@
-import csv
 import glob
-import io
 import os
 import traceback
 
 import click
 
+from kikit.common import splitStr
 from kikit.panelize_ui_sections import *
 
 PKG_BASE = os.path.dirname(__file__)
@@ -30,17 +29,6 @@ def addCompatibleShellCompletion(completionFn):
         return {"shell_complete": completionFn}
     else:
         return {"autocompletion": completionFn}
-
-
-def splitStr(delimiter, escapeChar, s):
-    """
-    Splits s based on delimiter that can be escaped via escapeChar
-    """
-    # Let's use csv reader to implement this
-    reader = csv.reader(io.StringIO(s), delimiter=delimiter, escapechar=escapeChar)
-    # Unpack first line
-    for x in reader:
-        return x
 
 
 class Section(click.ParamType):
