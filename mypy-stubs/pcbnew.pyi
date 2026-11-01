@@ -337,6 +337,8 @@ class _DXF_UNITS: ...
 DXF_UNITS_INCH: typing.Final[_DXF_UNITS] = ...  # line 8789
 DXF_UNITS_MM: typing.Final[_DXF_UNITS] = ...  # line 8791
 
+def IsActionRunning() -> bool: ...  # line 9830
+
 class BOARD_ITEM(EDA_ITEM):  # line 10252
     def GetLayer(self) -> _PCB_LAYER_ID: ...  # line 10378
     # # @typing.overload
@@ -377,9 +379,20 @@ class UNITS_PROVIDER:  # line 10664
 
 class PCB_BARCODE(BOARD_ITEM): ...  # line 10764
 
+@typing.type_check_only
+class _REMOVE_MODE: ...
+
+REMOVE_MODE_NORMAL: typing.Final[_REMOVE_MODE] = ...  # line 11091
+REMOVE_MODE_BULK: typing.Final[_REMOVE_MODE] = ...  # line 11093
+
 class BOARD_ITEM_CONTAINER(BOARD_ITEM):  # line 11095
+    def RemoveNative(
+        self, aItem: BOARD_ITEM, aMode: _REMOVE_MODE = ..., /
+    ) -> None: ...  # line 11108
+    def DeleteNative(self, aItem: BOARD_ITEM) -> None: ...  # line 11112
     def Add(self, item: BOARD_ITEM) -> None: ...  # line 11116
     def Remove(self, item: BOARD_ITEM) -> None: ...  # line 11126
+    def Delete(self, item: BOARD_ITEM) -> None: ...  # line 11136
 
 class BOARD_CONNECTED_ITEM(BOARD_ITEM): ...  # line 11150
 
