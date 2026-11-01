@@ -8,4 +8,4 @@ import pcbnew
 # https://gitlab.com/kicad/code/kicad/-/work_items/25423
 # https://github.com/yaqwsx/KiKit/issues/938
 if not hasattr(pcbnew.SwigPyIterator, "next"):
-    pcbnew.SwigPyIterator.next = lambda it: next(it)
+    pcbnew.SwigPyIterator.next = pcbnew.SwigPyIterator.__next__  # type: ignore[method-assign]

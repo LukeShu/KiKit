@@ -5,13 +5,7 @@ import _typeshed
 
 _SWIGPY_SLICEOBJECT = slice[typing.SupportsIndex | None]
 
-class SwigPyIterator:  # line 58
-    next: typing.Callable[[SwigPyIterator], typing.Any]  # missing in 10.0.7
-    def __next__(self) -> typing.Any: ...  # line 92
-    def __iter__(self) -> typing.Self: ...  # line 130
-
-@typing.type_check_only
-class _SwigPyIterator[T]:  # line 58
+class SwigPyIterator[T]:  # line 58
     def next(self) -> T: ...  # missing in 10.0.7
     def __next__(self) -> T: ...  # line 92
     def __iter__(self) -> typing.Self: ...  # line 130
@@ -390,14 +384,14 @@ class BOARD_ITEM_CONTAINER(BOARD_ITEM):  # line 11095
 class BOARD_CONNECTED_ITEM(BOARD_ITEM): ...  # line 11150
 
 class ZONES:  # line 12527
-    def iterator(self) -> _SwigPyIterator[ZONE]: ...  # line 12533
-    def __iter__(self) -> _SwigPyIterator[ZONE]: ...  # line 12536
+    def iterator(self) -> SwigPyIterator[ZONE]: ...  # line 12533
+    def __iter__(self) -> SwigPyIterator[ZONE]: ...  # line 12536
     def __bool__(self) -> bool: ...  # line 12539
     def __len__(self) -> int: ...  # line 12543
     def append(self, x: ZONE) -> None: ...  # line 12573
 
 class DRAWINGS:  # line 13419
-    def iterator(self) -> _SwigPyIterator[BOARD_ITEM]: ...  # line 13425
+    def iterator(self) -> SwigPyIterator[BOARD_ITEM]: ...  # line 13425
     def __bool__(self) -> bool: ...  # line 13431
     def __len__(self) -> int: ...  # line 13435
     # __delitem__  # line 13439
